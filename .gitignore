@@ -30,3 +30,5 @@ vite.config.ts.timestamp-*
 .vscode
 .claude
 .agents
+.codex
+.superpowers

@@ -105,6 +105,11 @@
       "source": "pbakaus/impeccable",
       "sourceType": "github",
       "computedHash": "c6942dc2c2ff4cc6761a43f07a8d8719ec04b702b6b2c1c9793a5595b662a48b"
+    },
+    "wrangler": {
+      "source": "cloudflare/skills",
+      "sourceType": "github",
+      "computedHash": "2fdaf206b99722f8091ad55c98641f9e70aa9c73c3b6edc08671fc1978c23a89"
     }
   }
 }

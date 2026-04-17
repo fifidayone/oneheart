@@ -8,18 +8,32 @@
   import type Lenis from "lenis";
   import Menu from "$lib/components/Menu.svelte";
   import EventsPanel from "$lib/components/EventsPanel.svelte";
-  import { menuOpen, leftMenuOpen } from "$lib/stores/menu";
+  import { menuOpen, leftMenuOpen, isNavReady } from "$lib/stores/menu";
   import { i18n } from "$lib/i18n.svelte";
 
   let { children } = $props();
   let lenis: Lenis | undefined = $state();
+  const NAV_READY_FALLBACK_MS = 700;
+  let navReadyTimeout: ReturnType<typeof setTimeout> | undefined;
+  let rafId: number | undefined;
+
+  function clearNavReadyTimer() {
+    if (navReadyTimeout) {
+      clearTimeout(navReadyTimeout);
+      navReadyTimeout = undefined;
+    }
+  }
 
   function openMenu() {
+    isNavReady.set(false); // Reset before animation
+    leftMenuOpen.set(false);
     menuOpen.set(true);
     lenis?.stop();
   }
 
   function openLeftMenu() {
+    isNavReady.set(false); // Reset before animation
+    menuOpen.set(false);
     leftMenuOpen.set(true);
     lenis?.stop();
   }
@@ -30,6 +44,21 @@
   let isResizing = $state(false);
   let resizeTimeout: ReturnType<typeof setTimeout>;
 
+  $effect(() => {
+    const isPanelOpen = $menuOpen || $leftMenuOpen;
+
+    clearNavReadyTimer();
+
+    if (isPanelOpen) {
+      navReadyTimeout = setTimeout(() => {
+        isNavReady.set(true);
+        navReadyTimeout = undefined;
+      }, NAV_READY_FALLBACK_MS);
+    } else {
+      isNavReady.set(false);
+    }
+  });
+
   function handleResize() {
     if (!$menuOpen && !$leftMenuOpen) return;
     isResizing = true;
@@ -39,17 +68,28 @@
     }, 150);
   }
 
+  function handlePinchZoomBlock(event: WheelEvent) {
+    if (event.ctrlKey) {
+      event.preventDefault();
+    }
+  }
+
+  function syncNavReady() {
+    clearNavReadyTimer();
+    isNavReady.set($menuOpen || $leftMenuOpen);
+  }
+
+  function handlePageWrapperTransition(event: TransitionEvent) {
+    if (event.target !== event.currentTarget || event.propertyName !== "transform") {
+      return;
+    }
+
+    syncNavReady();
+  }
+
   onMount(async () => {
     // Lock Pinch-to-Zoom อย่างเด็ดขาดตามการตัดสินใจ
-    document.addEventListener(
-      "wheel",
-      (e) => {
-        if (e.ctrlKey) {
-          e.preventDefault();
-        }
-      },
-      { passive: false },
-    );
+    document.addEventListener("wheel", handlePinchZoomBlock, { passive: false });
 
     window.addEventListener("resize", handleResize);
 
@@ -64,7 +104,7 @@
 
     function raf(time: number) {
       lenis?.raf(time);
-      requestAnimationFrame(raf);
+      rafId = requestAnimationFrame(raf);
     }
 
     lenis.on("scroll", (e: any) => {
@@ -85,7 +125,7 @@
       }, 3000);
     });
 
-    requestAnimationFrame(raf);
+    rafId = requestAnimationFrame(raf);
   });
 
   afterNavigate(() => {
@@ -99,6 +139,13 @@
     lenis?.destroy();
     clearTimeout(scrollTimeout);
     clearTimeout(resizeTimeout);
+    clearNavReadyTimer();
+    if (rafId) {
+      cancelAnimationFrame(rafId);
+    }
+    if (typeof document !== "undefined") {
+      document.removeEventListener("wheel", handlePinchZoomBlock);
+    }
     if (typeof window !== "undefined") {
       window.removeEventListener("resize", handleResize);
     }
@@ -119,51 +166,43 @@
 </div>
 
 <div
-  class="page-wrapper"
+  class="layout-shell"
   class:is-open={$menuOpen}
   class:is-left-open={$leftMenuOpen}
-  class:no-transition={isResizing}
 >
   <div class="sticky-header-wrapper">
     <header class="site-header">
       <!-- TOP LEFT (Grid column preserved) -->
       <div class="header-left">
-        <button class="nav-btn left-trigger mobile-only" onclick={openLeftMenu} aria-label="Open events">
+        <button
+          class="nav-btn left-trigger mobile-only"
+          onclick={openLeftMenu}
+          aria-label="Open events"
+        >
           <div class="nav-lines events-icon">
             <span class="line top-line"></span>
             <span class="line bot-line"></span>
           </div>
-          <span class="nav-text-persistent">{i18n.t('nav_events')}</span>
+          <span class="nav-text-persistent">{i18n.t("nav_events")}</span>
         </button>
       </div>
 
       <!-- CENTER SIDE (All screens) -->
-      <div class="header-center">
-          <div class="lang-text-switcher">
-            <button 
-              class:active={i18n.currentLocale === 'en'} 
-              onclick={() => i18n.setLocale('en')}
-            >ENG</button>
-            <button 
-              class:active={i18n.currentLocale === 'th'} 
-              onclick={() => i18n.setLocale('th')}
-            >THA</button>
-            <button 
-              class:active={i18n.currentLocale === 'tw'} 
-              onclick={() => i18n.setLocale('tw')}
-            >TWN</button>
-          </div>
-      </div>
+      <div class="header-center"></div>
 
       <!-- TOP RIGHT (Grid column preserved) -->
       <div class="header-right">
-          <button class="nav-btn right-trigger mobile-only" onclick={openMenu} aria-label="Open menu">
-            <span class="nav-text-persistent">{i18n.t('nav_menu')}</span>
-            <div class="nav-lines">
-              <span class="line top-line"></span>
-              <span class="line bot-line"></span>
-            </div>
-          </button>
+        <button
+          class="nav-btn right-trigger mobile-only"
+          onclick={openMenu}
+          aria-label="Open menu"
+        >
+          <span class="nav-text-persistent">{i18n.t("nav_menu")}</span>
+          <div class="nav-lines">
+            <span class="line top-line"></span>
+            <span class="line bot-line"></span>
+          </div>
+        </button>
       </div>
     </header>
   </div>
@@ -171,15 +210,24 @@
   <!-- Vertical Nav Labels (Desktop only) -->
   <div class="vertical-label-container left desktop-only">
     <button class="v-label" onclick={openLeftMenu}>
-      <span>{i18n.t('nav_events')}</span>
+      <span>{i18n.t("nav_events")}</span>
     </button>
   </div>
 
   <div class="vertical-label-container right desktop-only">
     <button class="v-label" onclick={openMenu}>
-      <span>{i18n.t('nav_menu')}</span>
+      <span>{i18n.t("nav_menu")}</span>
     </button>
   </div>
+
+  <div
+    class="page-wrapper"
+    class:is-open={$menuOpen}
+    class:is-left-open={$leftMenuOpen}
+    class:no-transition={isResizing}
+    ontransitionend={handlePageWrapperTransition}
+    ontransitioncancel={handlePageWrapperTransition}
+  >
 
   {#key $page.url.pathname}
     <div
@@ -190,6 +238,7 @@
       {@render children()}
     </div>
   {/key}
+  </div>
 </div>
 
 <style>
@@ -202,11 +251,11 @@
     --menu-scale: 0.8;
     --events-panel-scale: 0.8;
     /* Content offset inside the menu panel follows viewport size smoothly. */
-    --menu-content-offset: clamp(2rem, 8%, 8rem);
+    --menu-content-offset: clamp(2rem, 8vw, 8rem);
     --events-content-offset: clamp(2.5rem, 5vw, 4rem);
-    --menu-link-size: 32px;
-    --menu-link-gap: 2rem;
-    
+    --menu-link-size: clamp(28px, 2.5vw, 32px);
+    --menu-link-gap: clamp(1.8rem, 2.5vw, 2.2rem);
+
     /* Global Fluid Edge for consistent horizontal alignment across all screens */
     --fluid-edge: clamp(3rem, 8vw, 8rem);
     /* Corner push for nav items */
@@ -215,38 +264,39 @@
 
   @media (max-width: 1200px) {
     :global(:root) {
-      /* ปรับระยะให้ขยับไปซ้ายเพิ่มขึ้นในจอขนาดกลาง */
-      --menu-width: 460px;
+      /* ปรับระยะให้ขยับไปซ้ายเพิ่มขึ้นในจอขนาดกลาง โดยให้สบกับจุดพัก 40% (1200 * 0.4 = 480) */
+      --menu-width: 480px;
       --events-panel-width: clamp(30rem, 52vw, 38rem);
       --events-content-offset: clamp(2rem, 5vw, 3.25rem);
+      --menu-link-size: clamp(27px, 2.4vw, 30px);
+      --menu-link-gap: clamp(1.9rem, 2.2vw, 2.1rem);
     }
   }
 
   @media (max-width: 900px) {
     :global(:root) {
-      /* ปรับให้ค่าที่ 640px จบที่ 340px พอดีกับ Stage ถัดไป */
-      --menu-width: clamp(340px, 52%, 460px);
+      /* ปรับให้ค่าที่ 900px จูบกับ 480px พอดี และจบที่ 340px ที่ 640px */
+      --menu-width: clamp(340px, 53.33%, 480px);
       --events-panel-width: clamp(26rem, 64vw, 32rem);
-      /* ดันเนื้อหาออกไปให้กว้างขึ้นอีก และจบที่ ~4rem ที่ขอบ 640px */
-      --menu-content-offset: clamp(4rem, 12%, 6rem);
+      /* ให้ Gap หดตัวสัมพันธ์กับหน้าจอ Tablet */
+      --menu-content-offset: clamp(3.5rem, 10vw, 6rem);
       --events-content-offset: clamp(1.75rem, 4vw, 2.75rem);
-      /* ปรับให้ค่าที่ 640px จบที่ 26px พอดี */
-      --menu-link-size: clamp(26px, 3.35%, 30px);
-      /* ปรับให้ค่าที่ 640px จบที่ 1.8rem พอดี */
-      --menu-link-gap: clamp(1.8rem, 3.2%, 1.95rem);
+      /* Font ค่อยๆ หดตัวลง */
+      --menu-link-size: clamp(26px, 3vw, 30px);
+      --menu-link-gap: clamp(1.8rem, 2vw, 2rem);
     }
   }
 
   @media (max-width: 640px) {
     :global(:root) {
-      /* ปล่อยให้มันยืดหยุ่นได้มากขึ้น ไม่ไป Lock ขั้นต่ำไว้สูงเกินไป (จาก 285px เหลือ 70%) */
-      --menu-width: clamp(240px, 75%, 340px);
+      /* ปรับให้ค่าที่ 640px เริ่มต้นที่ 340px พอดีเป๊ะเพื่อไม่ให้กระโดด */
+      --menu-width: clamp(260px, 82%, 340px);
       --events-panel-width: clamp(20rem, 90vw, 24rem);
       /* บนมือถือย่อให้น้อยลงนิดนึงเพื่อให้ยังเห็นเนื้อหาข้างใน */
       --menu-scale: 0.85;
       --events-panel-scale: 0.88;
-      /* ขยาย Gap ให้กว้างขึ้นตามคำขอครับ */
-      --menu-content-offset: clamp(2.5rem, 15vw, 4rem);
+      /* จูน Gap บนมือถือให้ชิดขึ้นแต่ไม่ทับขอบ */
+      --menu-content-offset: clamp(2rem, 10vw, 3.5rem);
       --events-content-offset: clamp(1.25rem, 5vw, 1.75rem);
       --menu-link-size: 26px;
       --menu-link-gap: 1.8rem;
@@ -257,7 +307,7 @@
   :global(body) {
     margin: 0;
     padding: 0;
-    background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(226, 232, 240, 0.15), transparent 70%), #000000;
+    background: var(--color-bg);
     overflow: hidden;
     overscroll-behavior: none; /* สกัดบั๊กหน้าต่างกระเด้ง(Bounce) และ Trackpad Jitter บน Mac/Windows */
     touch-action: pan-y; /* สกัดการทำงานของ Pinch-to-zoom ระดับ CSS */
@@ -287,8 +337,8 @@
   .scroll-progress-bar {
     width: 100%;
     height: 100%;
-    background: #ffffff;
-    box-shadow: 0 0 12px rgba(255, 255, 255, 0.4);
+    background: var(--color-white);
+    box-shadow: 0 0 12px rgba(var(--color-white-rgb), 0.4);
     border-radius: 0 2px 2px 0;
     transform-origin: 0% 50%; /* Scale from left edge */
     transform: scaleX(0); /* GPU Accelerated default state */
@@ -301,7 +351,7 @@
     z-index: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(226, 232, 240, 0.1), transparent 70%), #000000; /* Sophisticated subtle Pearl Mist glow for content container */
+    background: var(--color-bg); /* Deeper background for better contrast */
     -ms-overflow-style: none; /* IE and Edge */
     scrollbar-width: none; /* Firefox */
     transform-origin: right center; /* Default for Right Menu */
@@ -313,34 +363,33 @@
   .page-wrapper.is-open {
     transform-origin: right center !important;
     transform: translateX(calc(-1 * var(--menu-width))) scale(var(--menu-scale));
-    border-radius: 0; 
+    border-radius: 0;
     border: none; /* Remove simple border for best practice lighting */
     pointer-events: none;
     overflow: hidden;
-    /* Enhanced Ultra-Elevation: Deep Multi-Layered Shadows + Symmetrical Rim Lighting */
-    box-shadow: 
-      -60px 80px 140px rgba(0, 0, 0, 0.95), /* Deep Ambient Shadow */
-      0 0 0 1px rgba(240, 238, 233, 0.12),   /* Continuous thin edge */
-      inset 0 1.5px 0.5px rgba(240, 238, 233, 0.3), /* Top Rim Light (From Pearl Mist) */
-      inset 0 -1px 0 rgba(240, 238, 233, 0.08); /* Bottom Reflected Light (Floor Reflection to avoid sinking) */
+    /* Pearl Mist Lighting: Dynamic Top Light (Point 2) increased to 0.35 for better 'lift' */
+    box-shadow:
+      0 0 0 1px rgba(var(--color-text-rgb), 0.1),
+      inset 0 2px 1.2px rgba(var(--color-text-rgb), 0.35),
+      inset 0 -0.8px 0 rgba(var(--color-text-rgb), 0.05);
   }
 
   .page-wrapper.is-left-open {
     transform-origin: left center !important;
-    transform: translateX(var(--events-panel-width)) scale(var(--events-panel-scale));
+    transform: translateX(var(--events-panel-width))
+      scale(var(--events-panel-scale));
     border-radius: 0;
     border: none;
     pointer-events: none;
     overflow: hidden;
-    /* Enhanced Ultra-Elevation: Symmetrical Deep Shadows with Multi-Rim Lighting */
-    box-shadow: 
-      60px 80px 140px rgba(0, 0, 0, 0.95), 
-      0 0 0 1px rgba(240, 238, 233, 0.12),
-      inset 0 1.5px 0.5px rgba(240, 238, 233, 0.3), /* Top Rim */
-      inset 0 -1px 0 rgba(240, 238, 233, 0.08); /* Bottom Reflected Light */
+    /* Pearl Mist Lighting: Dynamic Top Light (Point 2) increased to 0.35 for better 'lift' */
+    box-shadow:
+      0 0 0 1px rgba(var(--color-text-rgb), 0.1),
+      inset 0 2px 1.2px rgba(var(--color-text-rgb), 0.35),
+      inset 0 -0.8px 0 rgba(var(--color-text-rgb), 0.05);
   }
 
-  .page-wrapper.is-open *, 
+  .page-wrapper.is-open *,
   .page-wrapper.is-left-open * {
     pointer-events: none !important;
   }
@@ -350,7 +399,7 @@
   }
 
   .sticky-header-wrapper {
-    position: sticky;
+    position: fixed;
     top: 0;
     left: 0;
     width: 100%;
@@ -368,7 +417,11 @@
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
     /* Pushed UP into the corner based on trends */
-    padding: 1.5rem var(--nav-edge);
+    padding:
+      calc(1.5rem + env(safe-area-inset-top))
+      calc(var(--nav-edge) + env(safe-area-inset-right))
+      1.5rem
+      calc(var(--nav-edge) + env(safe-area-inset-left));
     transition: opacity 0.4s ease;
   }
   .header-left {
@@ -384,54 +437,6 @@
     justify-content: flex-end;
   }
 
-  /* --- LANGUAGE SWITCHER RE-DESIGN (Quiet Luxury) --- */
-  .lang-text-switcher {
-    display: flex;
-    align-items: center;
-    gap: clamp(1rem, 3vw, 2rem);
-  }
-
-  .lang-text-switcher button {
-    font-family: var(--font-primary);
-    font-size: 0.65rem;
-    font-weight: 500;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: rgba(240, 238, 233, 0.3);
-    background: none;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    transition: color 0.4s ease, opacity 0.4s ease;
-    position: relative;
-  }
-
-  .lang-text-switcher button:hover {
-    color: rgba(240, 238, 233, 0.8);
-  }
-
-  .lang-text-switcher button.active {
-    color: #f0eee9;
-  }
-
-  /* Microscopic indicator dot */
-  .lang-text-switcher button::after {
-    content: '';
-    position: absolute;
-    bottom: -6px;
-    left: 50%;
-    transform: translateX(-50%) scale(0);
-    width: 2px;
-    height: 2px;
-    border-radius: 50%;
-    background: #f0eee9;
-    transition: transform 0.4s cubic-bezier(0.25, 1, 0.4, 1);
-  }
-
-  .lang-text-switcher button.active::after {
-    transform: translateX(-50%) scale(1);
-  }
-
   /* --- NAV BUTTONS --- */
   .nav-btn {
     background: none;
@@ -439,135 +444,180 @@
     cursor: pointer;
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 0;
-    height: 32px; /* Desktop height */
+    gap: 16px;
+    padding: 0.5rem;
+    height: 44px;
     position: relative;
     z-index: 5;
+    transition: opacity 0.3s ease;
   }
 
-  @media (max-width: 1023px) {
-    .nav-btn {
-      height: 44px; /* Mobile height */
-      gap: 10px;
-    }
+  .nav-btn:hover {
+    opacity: 0.8;
   }
 
   .nav-lines {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    width: 40px;
+    width: 24px;
+    position: relative;
   }
 
   .left-trigger .nav-lines {
     align-items: flex-start;
   }
-
   .right-trigger .nav-lines {
     align-items: flex-end;
   }
 
   .nav-lines .line {
     display: block;
-    height: 2px;
-    background: rgba(240, 238, 233, 0.8);
-    border-radius: 2px;
-    transition: 
-      width 0.4s cubic-bezier(0.25, 1, 0.3, 1), 
-      transform 0.4s cubic-bezier(0.25, 1, 0.3, 1), 
-      background 0.3s ease,
-      box-shadow 0.3s ease;
+    height: 1.5px;
+    width: 100%;
+    background: var(--color-text);
+    border-radius: 1px;
+    transition: box-shadow 0.3s ease;
+    box-shadow: 0 0 8px rgba(var(--color-text-rgb), 0.2);
   }
 
-  .nav-lines .top-line { width: 32px; }
-  .nav-lines .bot-line { width: 18px; }
+  .nav-btn:hover .line {
+    box-shadow: 0 0 12px rgba(var(--color-text-rgb), 0.5);
+  }
 
-  /* --- VERTICAL LABELS (Desktop) --- */
+  /* --- VERTICAL LABELS (Desktop Re-imagined) --- */
   .vertical-label-container {
     position: fixed;
     top: 50%;
-    transform: translateY(-50%);
-    z-index: 5;
+    transform: translateY(-50%) translateZ(0);
+    z-index: 20; /* Ensure higher than page content for stability */
     pointer-events: none;
     transition: opacity 0.4s ease;
+    will-change: transform, opacity;
   }
 
   .vertical-label-container.left {
-    left: 0;
+    left: 0.5rem;
   }
-
   .vertical-label-container.right {
-    right: 0;
+    right: 0.5rem;
   }
 
   .v-label {
-    background: #f0eee9;
-    border: none;
-    width: 40px;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(var(--color-text-rgb), 0.1);
+    /* Razor-thin rim highlight on the leading edge */
+    box-shadow:
+      inset 0 1px 1px rgba(var(--color-text-rgb), 0.05),
+      0 10px 30px rgba(0, 0, 0, 0.5);
+    width: 44px;
     height: 130px;
     padding: 0;
     cursor: pointer;
     pointer-events: auto;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    transition: transform 0.4s cubic-bezier(0.25, 1, 0.3, 1), background 0.4s ease;
+    transition:
+      background 0.3s ease,
+      border-color 0.3s ease;
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .v-label::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      180deg,
+      transparent,
+      rgba(var(--color-text-rgb), 0.06),
+      transparent
+    );
+    transform: translateY(-100%);
+    transition: transform 0.6s ease;
+  }
+
+  .v-label:hover::before {
+    transform: translateY(100%);
+  }
+
+  .v-label:hover {
+    background: rgba(var(--color-text-rgb), 0.08);
+    border-color: rgba(var(--color-text-rgb), 0.3);
   }
 
   .v-label span {
-    font-family: "Clash Display", var(--font-primary);
-    font-size: 13px;
-    font-weight: 500;
-    letter-spacing: 0.35em;
+    font-family: var(--font-primary);
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: #111111;
+    color: var(--color-text);
     writing-mode: vertical-rl;
     transform: rotate(180deg);
     display: block;
     text-align: center;
+    opacity: 0.7;
+    transition: opacity 0.3s ease;
   }
 
+  .v-label:hover span {
+    opacity: 1;
+  }
 
   /* Persistent Labels (Option A) */
   .nav-text-persistent {
     font-family: var(--font-primary);
-    font-size: 11px;
-    font-weight: 500;
-    letter-spacing: 0.18em;
-    color: rgba(240, 238, 233, 1);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    color: var(--color-text);
     text-transform: uppercase;
     white-space: nowrap;
-    opacity: 0.45;
-    transition: opacity 0.3s ease, letter-spacing 0.3s ease;
+    opacity: 0.6;
+    transition: opacity 0.3s ease;
   }
-  
+
   .nav-btn:hover .nav-text-persistent {
     opacity: 1;
+    text-shadow: 0 0 12px rgba(var(--color-text-rgb), 0.3);
   }
 
   /* Hide labels/sidebars when panels are open */
-  :global(.is-open) .vertical-label-container,
-  :global(.is-left-open) .vertical-label-container,
-  :global(.is-open) .site-header,
-  :global(.is-left-open) .site-header {
+  .layout-shell.is-open .vertical-label-container,
+  .layout-shell.is-left-open .vertical-label-container,
+  .layout-shell.is-open .site-header,
+  .layout-shell.is-left-open .site-header {
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.3s ease;
   }
 
   /* ===== MOBILE BREAKPOINTS ===== */
-  @media (max-width: 768px) {
+  @media (max-width: 1024px) {
     .site-header {
-      padding: 1.25rem 1.5rem;
+      padding:
+        calc(1.25rem + env(safe-area-inset-top))
+        calc(1.5rem + env(safe-area-inset-right))
+        1.25rem
+        calc(1.5rem + env(safe-area-inset-left));
     }
-    
+
     .nav-btn {
       gap: 10px;
     }
 
     .nav-text-persistent {
-      font-size: 9px;
+      font-size: 0.65rem;
       letter-spacing: 0.1em;
     }
   }
@@ -580,9 +630,12 @@
     display: none !important;
   }
 
-  @media (max-width: 1023px) {
-    .desktop-only { display: none !important; }
-    .mobile-only { display: flex !important; }
+  @media (max-width: 1024px) {
+    .desktop-only {
+      display: none !important;
+    }
+    .mobile-only {
+      display: flex !important;
+    }
   }
 </style>
-

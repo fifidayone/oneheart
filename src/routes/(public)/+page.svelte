@@ -1,9 +1,34 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { fly } from "svelte/transition";
+  import { expoOut } from "svelte/easing";
   import { i18n } from "$lib/i18n.svelte";
 
-  let player: any;
-  let isFading = $state(false);
+  let videoReady = $state(false);
+  let videoEl: HTMLVideoElement | undefined = $state();
+
+  // Hero Toast Premium State
+  let showToast = $state(true);
+  let autoCollapseTimeout: ReturnType<typeof setTimeout>;
+
+  function startAutoCollapse() {
+    clearTimeout(autoCollapseTimeout);
+    autoCollapseTimeout = setTimeout(() => {
+      showToast = false;
+    }, 15000); // 15 seconds ephemeral line
+  }
+
+  function pauseAutoCollapse() {
+    clearTimeout(autoCollapseTimeout);
+  }
+
+  function resumeAutoCollapse() {
+    if (showToast) {
+      // Re-start from 15 seconds minus however long they looked at it?
+      // For simplicity and better UX, just reset the 15s timer when they leave
+      startAutoCollapse();
+    }
+  }
 
   // ควบคุมการย่อข้อความ Hero text ตามการ Scroll หน้าจอ
   let scrollY = $state(0);
@@ -25,12 +50,13 @@
   let activePhoto = $state(0);
 
   onMount(() => {
+    const cleanup: Array<() => void> = [];
+
     // 🛠️ FIX: SvelteKit layout uses Lenis custom wrapper, not window.scrollY
     const wrapper = document.querySelector(".page-wrapper");
     if (wrapper) {
       let ticking = false;
-      let lastScrollTop = wrapper.scrollTop;
-      scrollY = lastScrollTop;
+      scrollY = wrapper.scrollTop;
 
       // Cache layout metrics to prevent layout thrashing inside scroll loop!
       let pinTop = 0;
@@ -45,6 +71,7 @@
       // Calculate once then watch for resize
       calculateMetrics();
       window.addEventListener("resize", calculateMetrics);
+      cleanup.push(() => window.removeEventListener("resize", calculateMetrics));
 
       function updateSlide(currentScrollTop: number) {
         if (!storyPinEl || pinScrollRange <= 0) return;
@@ -65,21 +92,20 @@
       }
 
       // Single, hyper-optimized scroll listener
-      wrapper.addEventListener(
-        "scroll",
-        () => {
-          if (!ticking) {
-            window.requestAnimationFrame(() => {
-              const currentScrollTop = wrapper.scrollTop;
-              scrollY = currentScrollTop; // Update global hero scale
-              updateSlide(currentScrollTop); // Update local slideshow
-              ticking = false;
-            });
-            ticking = true;
-          }
-        },
-        { passive: true },
-      );
+      const handleWrapperScroll = () => {
+        if (!ticking) {
+          window.requestAnimationFrame(() => {
+            const currentScrollTop = wrapper.scrollTop;
+            scrollY = currentScrollTop; // Update global hero scale
+            updateSlide(currentScrollTop); // Update local slideshow
+            ticking = false;
+          });
+          ticking = true;
+        }
+      };
+
+      wrapper.addEventListener("scroll", handleWrapperScroll, { passive: true });
+      cleanup.push(() => wrapper.removeEventListener("scroll", handleWrapperScroll));
     }
 
     // Scroll Reveal Observer for Typography Section
@@ -94,53 +120,37 @@
         { threshold: 0.15, rootMargin: "0px 0px -40px 0px" },
       );
       observer.observe(storyEl);
+      cleanup.push(() => observer.disconnect());
     }
 
-    // Load YouTube API
-    const tag = document.createElement("script");
-    tag.src = "https://www.youtube.com/iframe_api";
-    const firstScriptTag = document.getElementsByTagName("script")[0];
-    firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
+    // 🛠️ FIX: Check if video is already loaded (race condition fix)
+    if (videoEl && (videoEl.readyState >= 3 && videoEl.paused === false)) {
+      videoReady = true;
+    }
 
-    // This function must be on window for the API to call it
-    (window as any).onYouTubeIframeAPIReady = () => {
-      player = new (window as any).YT.Player("youtube-player", {
-        videoId: "5iHF-RBn0Lk",
-        playerVars: {
-          autoplay: 1,
-          mute: 1,
-          controls: 0,
-          rel: 0,
-          showinfo: 0,
-          modestbranding: 1,
-          playsinline: 1,
-          start: 172,
-          vq: "hd1080",
-        },
-        events: {
-          onReady: (event: any) => {
-            event.target.playVideo();
-          },
-          onStateChange: (event: any) => {
-            // YT.PlayerState.ENDED = 0
-            if (event.data === 0) {
-              isFading = true;
-              setTimeout(() => {
-                player.seekTo(172);
-                player.playVideo();
-                setTimeout(() => {
-                  isFading = false;
-                }, 500);
-              }, 300);
-            }
-          },
-        },
-      });
+    // 🚀 IMPROVED iOS HANDLING: Attempt to play again on first interaction if blocked
+    const handleFirstInteraction = () => {
+      if (videoEl && videoEl.paused) {
+        videoEl.play().catch(() => {});
+      }
+      window.removeEventListener('click', handleFirstInteraction);
+      window.removeEventListener('touchstart', handleFirstInteraction);
     };
 
+    window.addEventListener("click", handleFirstInteraction);
+    window.addEventListener("touchstart", handleFirstInteraction);
+    cleanup.push(() => {
+      window.removeEventListener("click", handleFirstInteraction);
+      window.removeEventListener("touchstart", handleFirstInteraction);
+    });
+
+    // Start ephemeral progress line for the Hero Toast
+    startAutoCollapse();
+
     return () => {
-      if (player) {
-        player.destroy();
+      clearTimeout(autoCollapseTimeout);
+      for (const dispose of cleanup) {
+        dispose();
       }
     };
   });
@@ -148,13 +158,38 @@
 
 <div class="home">
   <!-- Video Background -->
-  <div class="video-background" class:fading={isFading}>
-    <div id="youtube-player"></div>
+  <div class="video-background">
+    <!-- Poster Image Layer (High-end immediate visual) -->
+    <img 
+      src="/hero/hero-poster.avif" 
+      alt="" 
+      class="hero-poster" 
+      class:hidden={videoReady}
+    />
+    
+    <video
+      bind:this={videoEl}
+      poster="/hero/hero-poster.avif?v=3"
+      autoplay
+      muted
+      loop
+      playsinline
+      preload="auto"
+      disablepictureinpicture
+      disableremoteplayback
+      onplaying={() => (videoReady = true)}
+      class="hero-video"
+      class:ready={videoReady}
+    >
+      <!-- Standard H.264 (AVC) Source - Universal compatibility -->
+      <source src="/hero/hero-video.mp4?v=3" type="video/mp4">
+      
+      Your browser does not support the video tag.
+    </video>
   </div>
 
   <!-- Dark & Grain Overlay -->
   <div class="overlay"></div>
-
   <!-- Center Screen Content -->
   <div
     class="center-content"
@@ -163,6 +198,42 @@
     <p class="top-label">Power As One</p>
     <h1>ONE HEART<br />PRODUCTIONS</h1>
   </div>
+
+  <!-- Featured Event Toast -->
+  {#if showToast}
+  <div class="featured-toast"
+       role="region"
+       aria-label="Featured Event"
+       in:fly={{ y: 20, duration: 800, easing: expoOut, delay: 1500 }}
+       out:fly={{ y: 20, duration: 400, opacity: 0, easing: expoOut }}
+       onmouseenter={pauseAutoCollapse}
+       onmouseleave={resumeAutoCollapse}>
+    <div class="toast-glass">
+      <button class="toast-quiet-close" onclick={() => { showToast = false; clearTimeout(autoCollapseTimeout); }} aria-label="Dismiss featured event: GAWDLAND Down Under">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <div class="toast-img-wrapper">
+        <img src="/hero/gawdland.avif" alt="Featured Event" class="toast-img" />
+      </div>
+      <div class="toast-info">
+        <span class="toast-eyebrow">UPCOMING SHOW</span>
+        <div class="toast-title-wrapper" data-full-title="GAWDLAND Down Under">
+          <h3 class="toast-title">GAWDLAND Down Under</h3>
+        </div>
+        <span class="toast-meta">Thu, Jun 04 &bull; Melbourne</span>
+      </div>
+      <a href="/upcoming" class="toast-btn" aria-label="View details for GAWDLAND Down Under">
+        DISCOVER
+      </a>
+      <!-- Ephemeral Progress Line -->
+      <div class="toast-progress-bar">
+        <div class="toast-progress-fill"></div>
+      </div>
+    </div>
+  </div>
+  {/if}
 </div>
 
 <!-- Sponsor/Client Marquee Section -->
@@ -331,7 +402,7 @@
               class:next={i > activePhoto}
               {src}
               alt="One Heart Productions – visual {i + 1}"
-              loading="eager"
+              loading={i === 0 ? "eager" : "lazy"}
             />
           {/each}
         </div>
@@ -345,7 +416,7 @@
     0% {
       transform: translateY(40px);
       opacity: 0;
-      filter: blur(4px);
+      filter: blur(8px);
     }
     100% {
       transform: translateY(0);
@@ -354,38 +425,17 @@
     }
   }
 
-  @keyframes filmGrain {
-    0% {
-      background-position: 0 0;
-    }
-    20% {
-      background-position: 10% 20%;
-    }
-    40% {
-      background-position: -15% -10%;
-    }
-    60% {
-      background-position: 25% -25%;
-    }
-    80% {
-      background-position: -5% 15%;
-    }
-    100% {
-      background-position: 0% 0%;
-    }
-  }
-
   @keyframes dotPulse {
     0%,
     100% {
       opacity: 0.3;
       transform: scale(0.8);
-      box-shadow: 0 0 0 rgba(240, 238, 233, 0);
+      box-shadow: 0 0 0 rgba(var(--color-text-rgb), 0);
     }
     50% {
       opacity: 1;
       transform: scale(1.2);
-      box-shadow: 0 0 8px rgba(240, 238, 233, 0.8); /* เงามนๆ หรูๆ */
+      box-shadow: 0 0 8px rgba(var(--color-text-rgb), 0.8); /* เงามนๆ หรูๆ */
     }
   }
 
@@ -396,14 +446,14 @@
     }
     50% {
       opacity: 1;
-      text-shadow: 0 0 20px rgba(240, 238, 233, 0.2);
+      text-shadow: 0 0 20px rgba(var(--color-text-rgb), 0.2);
     }
   }
 
   .home {
     min-height: 100vh;
     width: 100%;
-    background: #111111;
+    background: var(--color-bg-alt);
     position: relative;
     display: flex;
     align-items: center;
@@ -424,51 +474,59 @@
     pointer-events: none; /* บล็อกคำสั่งจาก Trackpad ทุกชนิดไม่ให้ทะลุไปรบกวน Video Player */
   }
 
-  .video-background.fading {
-    opacity: 0;
-  }
-
-  .video-background :global(iframe),
-  #youtube-player {
+  .video-background video,
+  .hero-video,
+  .hero-poster {
     position: absolute;
     top: 50%;
     left: 50%;
     width: 100vw;
-    height: 56.25vw; /* 16:9 aspect ratio */
-    min-height: 100vh;
-    min-width: 177.77vh; /* 16:9 aspect ratio */
-    transform: translate(-50%, -50%) scale(1.15); /* คืนค่าสเกลเดิม */
+    height: 100vh;
+    object-fit: cover;
+    transform: translate(-50%, -50%);
     pointer-events: none;
+    will-change: opacity, filter;
+  }
+
+  .hero-poster {
+    z-index: 1;
+    opacity: 1;
+    filter: brightness(0.6) contrast(1.1); /* Match the video's dark luxe feel */
+    transition: opacity 2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .hero-poster.hidden {
+    opacity: 0;
+  }
+
+  .hero-video {
+    z-index: 2;
+    opacity: 0;
+    filter: brightness(0.8) contrast(1.1);
+    transition:
+      opacity 2.5s cubic-bezier(0.16, 1, 0.3, 1),
+      filter 2.5s ease;
+  }
+
+  .hero-video.ready {
+    opacity: 1;
+    filter: brightness(0.7) contrast(1.15); /* Significantly darker for luxury feel */
   }
 
   /* Overlay: ฟิลเตอร์จางดำ + Grain Effect */
   .overlay {
     position: absolute;
-    top: -10%; /* ขยายแผ่นฟิลเตอร์ให้ใหญ่กว่าหน้าจอทะลุขอบไปเลย */
-    left: -10%;
-    width: 120%;
-    height: 120%;
-    background: radial-gradient(
-      circle at center,
-      rgba(14, 14, 15, 0.4) 0%,
-      rgba(14, 14, 15, 0.85) 100%
-    );
-    z-index: 1;
-    pointer-events: none;
-  }
-
-  .overlay::before {
-    content: "";
-    position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-    opacity: 0.12;
-    mix-blend-mode: overlay;
+    background: radial-gradient(
+      circle at center,
+      rgba(10, 10, 11, 0.4) 0%,
+      rgba(10, 10, 11, 0.92) 100%
+    );
+    z-index: 1;
     pointer-events: none;
-    animation: filmGrain 0.6s steps(4) infinite;
   }
 
   .center-content {
@@ -487,12 +545,13 @@
     font-weight: 500; /* เปลี่ยนจาก 300 เป็น 500 เพื่อความชัดเจน */
     letter-spacing: 0.4em; /* ช่องไฟกว้างขึ้นอีกนิดเพื่อให้ดูแกรนด์ */
     text-transform: uppercase;
-    color: rgba(240, 238, 233, 0.9); /* ชัดขึ้นกว่าเดิมนิดหน่อย */
+    color: rgba(var(--color-text-rgb), 0.95);
+    text-shadow: 0 0 30px rgba(var(--color-text-rgb), 0.15);
     margin: 0 0 1.5rem;
     display: inline-block;
     white-space: nowrap;
     opacity: 0;
-    animation: revealUp 1.4s cubic-bezier(0.25, 1, 0.4, 1) forwards;
+    animation: revealUp 1.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     animation-delay: 0.1s;
     will-change: transform, opacity, filter;
   }
@@ -503,12 +562,13 @@
     font-weight: 700;
     letter-spacing: 0.03em;
     line-height: 0.95;
-    color: #f0eee9;
+    color: var(--color-text);
+    text-shadow: 0 0 40px rgba(var(--color-text-rgb), 0.2);
     margin: 0;
     text-transform: uppercase;
     opacity: 0;
-    animation: revealUp 1.4s cubic-bezier(0.25, 1, 0.4, 1) forwards;
-    animation-delay: 0.25s;
+    animation: revealUp 1.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation-delay: 0.3s;
     will-change: transform, opacity, filter;
   }
 
@@ -516,9 +576,9 @@
   .clients-section {
     position: relative;
     z-index: 2;
-    background: #0a0a0b; /* Premium Deep Dark Luxe */
-    border-top: 1px solid rgba(240, 238, 233, 0.06); /* เส้นขอบบางเฉียบ หรูหรา */
-    border-bottom: 1px solid rgba(240, 238, 233, 0.06);
+    background: var(--color-bg-panel); /* Premium Deep Dark Luxe */
+    border-top: 1px solid rgba(var(--color-text-rgb), 0.06); /* เส้นขอบบางเฉียบ หรูหรา */
+    border-bottom: 1px solid rgba(var(--color-text-rgb), 0.06);
   }
 
   .clients-grid {
@@ -534,7 +594,7 @@
     align-items: center;
     /* Adjust padding closer to left edge and right border */
     padding: 0.6rem 1.5rem 0.6rem clamp(1.25rem, 3vw, var(--fluid-edge)); 
-    border-right: 1px solid rgba(240, 238, 233, 0.06);
+    border-right: 1px solid rgba(var(--color-text-rgb), 0.06);
     gap: 0.75rem;
   }
 
@@ -549,7 +609,7 @@
     width: 5px;
     height: 5px;
     border-radius: 50%;
-    background: #f0eee9; /* คืนความหรูหราด้วยสีขาวแพงๆ */
+    background: var(--color-text); /* คืนความหรูหราด้วยสีขาวแพงๆ */
     animation: dotPulse 1.2s cubic-bezier(0.25, 1, 0.5, 1) infinite;
     flex-shrink: 0;
   }
@@ -560,7 +620,7 @@
     letter-spacing: 0.25em; /* ลด letter-spacing ลงนิดนึงไม่ให้กระจุกเกินไป */
     text-transform: uppercase;
     font-weight: 500;
-    color: rgba(240, 238, 233, 0.6); /* กลับมาใช้สีเทาแพงๆ ตัดกับพื้นดำ */
+    color: rgba(var(--color-text-rgb), 0.6); /* กลับมาใช้สีเทาแพงๆ ตัดกับพื้นดำ */
     line-height: 1.4;
     white-space: nowrap; /* ห้ามตกบรรทัดเด็ดขาด */
   }
@@ -574,15 +634,15 @@
     mask-image: linear-gradient(
       to right,
       transparent,
-      rgba(0, 0, 0, 1) 15%,
-      rgba(0, 0, 0, 1) 85%,
+      rgba(var(--color-bg-rgb), 1) 15%,
+      rgba(var(--color-bg-rgb), 1) 85%,
       transparent
     );
     -webkit-mask-image: linear-gradient(
       to right,
       transparent,
-      rgba(0, 0, 0, 1) 15%,
-      rgba(0, 0, 0, 1) 85%,
+      rgba(var(--color-bg-rgb), 1) 15%,
+      rgba(var(--color-bg-rgb), 1) 85%,
       transparent
     );
   }
@@ -605,7 +665,7 @@
     display: flex;
     align-items: center;
     gap: 0.6rem; /* กระชับขึ้น */
-    color: rgba(240, 238, 233, 0.25); /* สีเทาเงิน เรียบหรูตอนยังไม่ Hover */
+    color: rgba(var(--color-text-rgb), 0.25); /* สีเทาเงิน เรียบหรูตอนยังไม่ Hover */
     transition:
       color 0.4s cubic-bezier(0.32, 0, 0.15, 1),
       transform 0.4s cubic-bezier(0.32, 0, 0.15, 1),
@@ -617,8 +677,8 @@
 
   /* Hover state: คืนค่าสีเดิมของแบรนด์และเด้งขึ้นเบาๆ */
   .brand:hover {
-    color: #ffffff; /* ขาวสว่างจ้า High Energy */
-    filter: grayscale(0%) drop-shadow(0 0 12px rgba(255, 255, 255, 0.3));
+    color: var(--color-white); /* ขาวสว่างจ้า High Energy */
+    filter: grayscale(0%) drop-shadow(0 0 12px rgba(var(--color-white-rgb), 0.3));
     transform: scale(1.05) translateY(-2px); /* เด้งคมๆ พอดีงาม */
   }
 
@@ -638,7 +698,7 @@
 
   .brand:hover span {
     /* เอา Hollow Text ออก */
-    color: #ffffff;
+    color: var(--color-white);
     -webkit-text-stroke: 0;
     text-shadow: none;
   }
@@ -664,11 +724,11 @@
     top: 0;
     height: 100vh;
     z-index: 2;
-    background: #060606;
+    background: var(--color-bg-dark);
     display: flex;
     justify-content: center;
     align-items: center;
-    border-bottom: 1px solid rgba(240, 238, 233, 0.05);
+    border-bottom: 1px solid rgba(var(--color-text-rgb), 0.05);
     overflow: hidden;
   }
 
@@ -710,9 +770,9 @@
     background-image: radial-gradient(
         ellipse at center,
         transparent 20%,
-        #060606 80%
+        var(--color-bg-dark) 80%
       ),
-      radial-gradient(rgba(240, 238, 233, 0.1) 1px, transparent 1px);
+      radial-gradient(rgba(var(--color-text-rgb), 0.1) 1px, transparent 1px);
     background-size:
       100% 100%,
       28px 28px;
@@ -769,7 +829,7 @@
   }
 
   .typo-narrative .word {
-    color: rgba(240, 238, 233, 0.06); /* Dark silver base, hidden */
+    color: rgba(var(--color-text-rgb), 0.06); /* Dark silver base, hidden */
     transform: translateY(40px) scale(0.9);
     opacity: 0;
     filter: blur(12px);
@@ -798,44 +858,75 @@
     transform: translateY(0) scale(1);
     opacity: 1;
     filter: blur(0);
-    color: rgba(240, 238, 233, 0.4); /* สว่างขึ้นแบบมีคลาส พรีเมียม */
+    color: rgba(var(--color-text-rgb), 0.4); /* สว่างขึ้นแบบมีคลาส พรีเมียม */
   }
 
   :global(.typo-narrative.revealed) .word:hover {
-    color: #ffffff;
+    color: var(--color-white);
     transform: scale(1.05) translateY(-5px);
     transition-delay: 0s !important;
     transition-duration: 0.3s;
-    text-shadow: 0 0 25px rgba(255, 255, 255, 0.5);
+    text-shadow: 0 0 25px rgba(var(--color-white-rgb), 0.5);
     z-index: 10;
   }
 
   .typo-narrative .word.highlight.aurora-text {
     font-weight: 700;
+    position: relative;
+    /* High-energy but sophisticated palette: Gold, Magenta, Cyan, Pearl */
     background: linear-gradient(
       -45deg,
-      #f0eee9 0%,
-      #a68c69 25%,
-      #e06b8c 50%,
-      #38bdf8 75%,
-      #f0eee9 100%
+      var(--color-text) 0%,
+      #c49b66 20%, /* Richer gold */
+      #ff2a70 40%, /* Vibrant production magenta */
+      #00d4ff 60%, /* Electric cyan */
+      #c49b66 80%,
+      var(--color-text) 100%
     );
     background-size: 300% 300%;
     color: transparent;
     -webkit-background-clip: text;
     background-clip: text;
     display: inline-block;
-    white-space: nowrap; /* ให้สโลแกนอยู่บรรทัดเดียวกันเสมอ */
+    white-space: nowrap;
+    -webkit-text-stroke: 1px rgba(255, 255, 255, 0.1); /* Subtle definition */
+  }
+
+  /* The actual cinematic glow behind the text */
+  .typo-narrative .word.highlight.aurora-text::after {
+    content: attr(data-text); /* Fallback or we can just use a pseudo element for glow */
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: inherit;
+    background-size: inherit;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: blur(24px);
+    opacity: 0;
+    transition: opacity 1.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   :global(.typo-narrative.revealed) .word.highlight.aurora-text {
-    animation: aurora-flow 6s ease-in-out infinite;
+    animation: aurora-flow 8s linear infinite;
+  }
+
+  :global(.typo-narrative.revealed) .word.highlight.aurora-text::after {
+    opacity: 0.6; /* Smooth cinematic backlight */
+    animation: aurora-flow 8s linear infinite;
   }
 
   :global(.typo-narrative.revealed) .word.highlight.aurora-text:hover {
-    animation: aurora-flow 2s linear infinite;
+    animation: aurora-flow 3s linear infinite;
     transform: scale(1.02) translateY(-2px);
-    text-shadow: none;
+    text-shadow: 0 0 30px rgba(255, 42, 112, 0.4); /* Magenta glow pop */
+  }
+
+  :global(.typo-narrative.revealed) .word.highlight.aurora-text:hover::after {
+    opacity: 0.9;
+    filter: blur(32px);
+    animation: aurora-flow 3s linear infinite;
   }
 
   @media (max-width: 900px) {
@@ -870,7 +961,7 @@
     }
     .clients-header-col {
       border-right: none;
-      border-bottom: 1px solid rgba(240, 238, 233, 0.06);
+      border-bottom: 1px solid rgba(var(--color-text-rgb), 0.06);
       padding: 0.8rem 1.5rem;
       justify-content: center;
     }
@@ -892,14 +983,14 @@
     aspect-ratio: 4 / 5; /* Standard vertical portrait ratio */
     /* Removed max-height so the frame NEVER squishes and crops the image on short screens */
     /* Dark luxe border frame */
-    border: 1px solid rgba(240, 238, 233, 0.12);
-    background: #0a0a0a;
+    border: 1px solid rgba(var(--color-text-rgb), 0.12);
+    background: var(--color-bg-panel);
     overflow: hidden;
     /* Slight inner shadow depth */
     box-shadow:
-      inset 0 0 60px rgba(0, 0, 0, 0.6),
-      0 0 0 1px rgba(240, 238, 233, 0.04),
-      0 24px 80px rgba(0, 0, 0, 0.5);
+      inset 0 0 60px rgba(var(--color-bg-rgb), 0.6),
+      0 0 0 1px rgba(var(--color-text-rgb), 0.04),
+      0 24px 80px rgba(var(--color-bg-rgb), 0.5);
   }
 
   /* Film-grain texture overlay */
@@ -926,7 +1017,7 @@
   .canvas-corner::after {
     content: "";
     position: absolute;
-    background: rgba(240, 238, 233, 0.5);
+    background: rgba(var(--color-text-rgb), 0.5);
   }
   .canvas-corner::before {
     width: 100%;
@@ -973,10 +1064,10 @@
     font-size: 0.6rem;
     letter-spacing: 0.2em;
     text-transform: uppercase;
-    color: rgba(240, 238, 233, 0.45);
+    color: rgba(var(--color-text-rgb), 0.45);
   }
   .canvas-index {
-    color: rgba(240, 238, 233, 0.9);
+    color: rgba(var(--color-text-rgb), 0.9);
     font-weight: 700;
     font-size: 0.75rem;
   }
@@ -1035,12 +1126,12 @@
     z-index: 2;
     background: linear-gradient(
         to bottom,
-        rgba(0, 0, 0, 0.3) 0%,
+        rgba(var(--color-bg-rgb), 0.3) 0%,
         transparent 30%,
         transparent 70%,
-        rgba(0, 0, 0, 0.5) 100%
+        rgba(var(--color-bg-rgb), 0.5) 100%
       ),
-      linear-gradient(to right, transparent 80%, rgba(0, 0, 0, 0.2) 100%);
+      linear-gradient(to right, transparent 80%, rgba(var(--color-bg-rgb), 0.2) 100%);
     pointer-events: none;
   }
 
@@ -1064,6 +1155,291 @@
       display: flex;
       align-items: center;
       justify-content: center;
+    }
+  }
+  /* ===== FEATURED TOAST (HERO HIGHLIGHT) ===== */
+  .featured-toast {
+    position: absolute;
+    bottom: clamp(2rem, 5vh, 4rem);
+    right: var(--nav-edge, 2rem);
+    z-index: 10;
+    color: var(--color-text);
+    opacity: 0;
+    transform: translateY(20px);
+    animation: revealUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 1.5s forwards;
+    pointer-events: none;
+  }
+
+  .toast-glass {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    /* Darker, more solid glass material for better readability */
+    background: linear-gradient(135deg, rgba(15, 15, 15, 0.85) 0%, rgba(5, 5, 5, 0.95) 100%);
+    backdrop-filter: blur(32px);
+    -webkit-backdrop-filter: blur(32px);
+    border: 1px solid rgba(240, 238, 233, 0.05);
+    border-radius: 2px;
+    padding: 12px;
+    box-shadow:
+      inset 0 1px 0 rgba(240, 238, 233, 0.1),
+      0 20px 40px rgba(0, 0, 0, 0.6);
+    width: 380px;
+    position: relative;
+    pointer-events: auto;
+    transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+  }
+
+  /* Ultra-Elevation subtle light on hover, NO bouncing */
+  .toast-glass:hover {
+    background: linear-gradient(135deg, rgba(25, 25, 25, 0.9) 0%, rgba(10, 10, 10, 1) 100%);
+    border-color: rgba(240, 238, 233, 0.15);
+    box-shadow:
+      inset 0 1px 0 rgba(240, 238, 233, 0.2),
+      0 25px 50px rgba(0, 0, 0, 0.8),
+      0 0 30px rgba(240, 238, 233, 0.03);
+  }
+
+  /* Quiet Luxury Close Button */
+  .toast-quiet-close {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: rgba(240, 238, 233, 0.4);
+    cursor: pointer;
+    border-radius: 50%;
+    transition: all 0.4s ease;
+    z-index: 20;
+    opacity: 0;
+  }
+
+  .toast-glass:hover .toast-quiet-close {
+    opacity: 1;
+  }
+
+  .toast-quiet-close:hover {
+    color: rgba(240, 238, 233, 1);
+    background: rgba(240, 238, 233, 0.1);
+  }
+
+  .toast-img-wrapper {
+    width: 72px;
+    height: 72px;
+    flex-shrink: 0;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .toast-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: brightness(0.85) contrast(1.1);
+    transition: filter 0.6s ease, transform 0.6s ease;
+  }
+
+  .toast-glass:hover .toast-img {
+    filter: brightness(1) contrast(1.1);
+    transform: scale(1.03);
+  }
+
+  .toast-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex-grow: 1;
+    min-width: 0;
+  }
+
+  .toast-eyebrow {
+    font-family: var(--font-primary);
+    font-size: 0.6rem;
+    letter-spacing: 0.25em;
+    color: rgba(240, 238, 233, 0.4);
+    text-transform: uppercase;
+  }
+
+  .toast-title-wrapper {
+    position: relative;
+    display: block;
+    max-width: 100%;
+    cursor: default;
+  }
+
+  .toast-title {
+    font-family: 'Clash Display', var(--font-primary);
+    font-size: 1.1rem;
+    font-weight: 500;
+    margin: 0;
+    line-height: 1.2;
+    color: #f0eee9;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* --- Premium Tooltip Glow --- */
+  .toast-title-wrapper::after {
+    content: attr(data-full-title);
+    position: absolute;
+    bottom: calc(100% + 14px); /* Float comfortably above the text */
+    left: -4px; /* Slight alignment bump to visually align with the edge */
+    width: max-content;
+    max-width: 280px;
+    white-space: normal; /* Allow long titles to wrap in the tooltip */
+
+    /* Premium Glass Style for Tooltip */
+    background: rgba(12, 12, 12, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(240, 238, 233, 0.12);
+    border-radius: 4px;
+    padding: 10px 14px;
+
+    /* Typography inside the tooltip */
+    font-family: var(--font-primary);
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: #f0eee9;
+    line-height: 1.4;
+    letter-spacing: 0.02em;
+    text-transform: none;
+
+    /* Animation defaults */
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+    pointer-events: none;
+    transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 20;
+
+    /* Dark Luxe deep shadow */
+    box-shadow:
+      inset 0 1px 1px rgba(240, 238, 233, 0.05),
+      0 12px 24px rgba(0, 0, 0, 0.8),
+      0 0 12px rgba(240, 238, 233, 0.03);
+  }
+
+  /* --- Tooltip Arrow --- */
+  .toast-title-wrapper::before {
+    content: "";
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 12px;
+    width: 8px;
+    height: 8px;
+    background: rgba(12, 12, 12, 0.95);
+    border-right: 1px solid rgba(240, 238, 233, 0.12);
+    border-bottom: 1px solid rgba(240, 238, 233, 0.12);
+    transform: rotate(45deg) translateY(4px) scale(0.96);
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 21;
+  }
+
+  /* Trigger the animations when mouse hovers over the title wrapper */
+  .toast-title-wrapper:hover::after {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    transition-delay: 0.25s; /* Small delay prevents flashing during rapid mouse movement */
+  }
+
+  .toast-title-wrapper:hover::before {
+    opacity: 1;
+    transform: rotate(45deg) translateY(0) scale(1);
+    transition-delay: 0.25s;
+  }
+
+  .toast-meta {
+    font-family: var(--font-primary);
+    font-size: 0.65rem;
+    color: rgba(240, 238, 233, 0.5);
+    letter-spacing: 0.05em;
+  }
+
+  .toast-btn {
+    font-family: var(--font-primary);
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    text-decoration: none;
+    padding: 0.5rem 1rem;
+    border-radius: 2px;
+    border: 1px solid rgba(240, 238, 233, 0.15);
+    background: transparent;
+    color: #f0eee9;
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .toast-btn:hover {
+    background: #f0eee9;
+    color: #000;
+    border-color: #f0eee9;
+  }
+
+  /* Ephemeral Progress Line */
+  .toast-progress-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: transparent;
+    pointer-events: none;
+  }
+
+  .toast-progress-fill {
+    width: 100%;
+    height: 100%;
+    background: rgba(240, 238, 233, 0.3);
+    transform-origin: left;
+    animation: shrinkLine 15s linear forwards;
+  }
+
+  .featured-toast:hover .toast-progress-fill {
+    animation-play-state: paused;
+  }
+
+  @keyframes shrinkLine {
+    0% { transform: scaleX(1); }
+    100% { transform: scaleX(0); }
+  }
+
+  /* Responsive Centering on Tablet/Mobile */
+  @media (max-width: 1024px) {
+    .featured-toast {
+      right: 0;
+      left: 0;
+      margin: 0 auto; /* Centers the absolute element perfectly */
+      width: max-content; /* Hugs the 340px width of toast-glass */
+      bottom: calc(2rem + env(safe-area-inset-bottom));
+    }
+
+    .toast-glass {
+      width: clamp(300px, 90vw, 360px);
+    }
+  }
+
+  @media (hover: none), (pointer: coarse) {
+    .toast-quiet-close {
+      opacity: 1;
+      background: rgba(240, 238, 233, 0.08);
+    }
+
+    .toast-title-wrapper::after,
+    .toast-title-wrapper::before {
+      display: none;
     }
   }
 </style>

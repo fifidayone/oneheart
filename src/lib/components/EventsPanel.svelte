@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { leftMenuOpen } from "$lib/stores/menu";
+  import { leftMenuOpen, isNavReady } from "$lib/stores/menu";
   import { i18n } from "$lib/i18n.svelte";
-  import { fade, fly, draw, scale } from "svelte/transition";
+  import { fly, draw, scale } from "svelte/transition";
   import { expoOut } from "svelte/easing";
 
   let { lenis, isResizing = false } = $props<{ lenis: any, isResizing?: boolean }>();
@@ -17,7 +17,7 @@
   }
 </script>
 
-<div class="events-backdrop" class:is-open={$leftMenuOpen}>
+<div class="events-backdrop" class:is-open={$leftMenuOpen} class:no-transition={isResizing}>
   <nav class="events-nav" class:is-open={$leftMenuOpen}>
     {#if $leftMenuOpen}
       <header class="ev-header" in:fly={{ y: 20, duration: 600, delay: 50, easing: expoOut }}>
@@ -25,26 +25,28 @@
         <h2 class="ev-title">{i18n.t('ev_title')}</h2>
       </header>
 
-      {#each events as event, i}
+      {#each events as event, i (event.date + event.title)}
         <div
-          class="ev-row"
+          class="ev-row pc-row"
           in:fly={{ y: 20, duration: 600, delay: 120 + i * 60, easing: expoOut }}
         >
-          <div class="ev-date">
-            <span>{event.date}</span>
-            <span class="ev-day">{event.day} / {event.time}</span>
+          <div class="pc-date-box">
+            <div class="pc-month">{event.date.split(' ')[0]}</div>
+            <div class="pc-day">{event.date.split(' ')[1]}</div>
           </div>
           <div class="ev-body">
             <span class="ev-queen">{event.queen}</span>
             <span class="ev-show">{event.title}</span>
-            <span class="ev-venue">@ {event.venue}</span>
+            <div class="ev-venue-status">
+              <span class="ev-venue">@ {event.venue}</span>
+              <span class="ev-status" class:sold-out={event.status === 'SOLD OUT'} class:limited={event.status === 'LIMITED'}>
+                {event.status === 'SOLD OUT' ? i18n.t('ev_status_sold_out') :
+                 event.status === 'LIMITED' ? i18n.t('ev_status_limited') :
+                 i18n.t('ev_status_available')}
+              </span>
+            </div>
           </div>
           <div class="ev-actions">
-            <span class="ev-status" class:sold-out={event.status === 'SOLD OUT'} class:limited={event.status === 'LIMITED'}>
-              {event.status === 'SOLD OUT' ? i18n.t('ev_status_sold_out') : 
-               event.status === 'LIMITED' ? i18n.t('ev_status_limited') : 
-               i18n.t('ev_status_available')}
-            </span>
             <a class="ev-link" href={event.url} target="_blank" rel="noreferrer">
               <span>{i18n.t('ev_tickets')}</span>
               <svg viewBox="0 0 12 12" width="10" height="10" fill="none">
@@ -62,23 +64,24 @@
   </nav>
 </div>
 
+{#if $leftMenuOpen && $isNavReady}
 <button
   class="close-btn-left"
-  class:is-visible={$leftMenuOpen}
   class:no-transition={isResizing}
+  in:scale={{ duration: 150, delay: 0, easing: expoOut }}
   onclick={closePanel}
   aria-label="Close events"
 >
   <svg class="close-icon" viewBox="0 0 24 24" fill="none">
     <path
-      class="line-1"
+      in:draw={{ duration: 250, delay: 450 }}
       d="M3 3L21 21"
       stroke="#f0eee9"
       stroke-width="2.2"
       stroke-linecap="round"
     />
     <path
-      class="line-2"
+      in:draw={{ duration: 250, delay: 300 }}
       d="M21 3L3 21"
       stroke="#f0eee9"
       stroke-width="2.2"
@@ -86,6 +89,7 @@
     />
   </svg>
 </button>
+{/if}
 
 <style>
   .events-backdrop {
@@ -93,26 +97,43 @@
     inset: 0;
     background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(226, 232, 240, 0.15), transparent 70%), #000000;
     display: flex;
-    align-items: center;
+    align-items: flex-start; /* Changed from center to allow safe scrolling */
     justify-content: center;
+    /* Mathematical centering inside the pushed panel */
     padding-right: calc(100vw - var(--events-panel-width) + var(--events-content-offset));
     padding-left: var(--events-content-offset);
+    /* Safe zones for desktop optical centering */
+    padding-top: clamp(3rem, 6vh, 5rem);
+    padding-bottom: clamp(3rem, 6vh, 5rem);
     z-index: 0;
     pointer-events: none;
     visibility: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
   }
+  .events-backdrop::-webkit-scrollbar { display: none; }
 
   .events-backdrop.is-open {
     pointer-events: auto;
     visibility: visible;
   }
 
+  /* Prevent lag and bouncing during window resize */
+  .events-backdrop.no-transition,
+  .events-backdrop.no-transition * {
+    transition: none !important;
+    transition-delay: 0s !important;
+    animation: none !important;
+  }
+
   .events-nav {
     display: flex;
     flex-direction: column;
     width: 100%;
-    max-width: min(100%, 26.25rem);
+    max-width: min(100%, 36rem);
     gap: 0;
+    margin: auto 0; /* This perfectly centers the content when it's shorter than the screen! */
   }
 
   .ev-header {
@@ -141,77 +162,135 @@
   }
 
   .ev-row {
-    display: grid;
-    grid-template-columns: minmax(4.5rem, 5.5rem) minmax(0, 1fr) auto;
-    gap: clamp(0.75rem, 1vw, 1rem);
-    align-items: start;
-    padding: clamp(1rem, 2vh, 1.5rem) 0;
-    border-bottom: 1px solid rgba(240, 238, 233, 0.08);
-    cursor: pointer;
-  }
-
-  .ev-row:first-of-type {
-    border-top: 1px solid rgba(240, 238, 233, 0.08);
-  }
-
-  .ev-date {
-    font-family: var(--font-primary);
-    font-size: clamp(0.7rem, 1vw, 0.8rem);
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    color: rgba(240, 238, 233, 0.5);
-    padding-top: 2px;
-    white-space: nowrap;
+    background: linear-gradient(135deg, rgba(30, 30, 30, 0.6) 0%, rgba(10, 10, 10, 0.8) 100%);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(240, 238, 233, 0.08);
+    border-radius: 4px;
+    padding: clamp(0.75rem, 1.5vw, 1.25rem);
+    margin-bottom: clamp(0.75rem, 1.5vw, 1rem);
     display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
+    gap: clamp(0.75rem, 1.5vw, 1.5rem);
+    align-items: center;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: inset 0 1px 1px rgba(240, 238, 233, 0.08), 0 10px 30px rgba(0, 0, 0, 0.6);
+    cursor: default;
+    position: relative;
+    overflow: hidden;
   }
 
-  .ev-day {
-    font-size: 0.58rem;
-    letter-spacing: 0.14em;
-    color: rgba(240, 238, 233, 0.28);
+  /* One-way Sweep Glow Effect */
+  .ev-row::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(180deg, transparent, rgba(240, 238, 233, 0.08), transparent);
+    transform: translateY(-100%);
+    pointer-events: none;
+    /* No transition here! When mouse leaves, it instantly resets to top invisibly */
+  }
+
+  .ev-row:hover::before {
+    transform: translateY(100%);
+    transition: transform 0.6s ease; /* Only animates when hovered */
+  }
+
+  .ev-row:hover {
+    background: linear-gradient(135deg, rgba(40, 40, 40, 0.85) 0%, rgba(15, 15, 15, 0.95) 100%);
+    border-color: rgba(240, 238, 233, 0.2);
+    box-shadow:
+      inset 0 1px 1px rgba(240, 238, 233, 0.25),
+      0 20px 40px rgba(0, 0, 0, 0.9),
+      0 0 20px rgba(240, 238, 233, 0.05);
+    transform: translateY(-2px);
+  }
+
+  .pc-date-box {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(240, 238, 233, 0.03);
+    border-radius: 4px;
+    text-align: center;
+    padding: clamp(0.5rem, 1vw, 0.75rem) clamp(0.5rem, 1.5vw, 1rem);
+    min-width: clamp(3.5rem, 5vw, 4.5rem);
+    flex-shrink: 0;
+    transition: all 0.4s ease;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+  }
+
+  .ev-row:hover .pc-date-box {
+    border-color: rgba(240, 238, 233, 0.08);
+    background: rgba(0, 0, 0, 0.6);
+  }
+
+  .pc-month {
+    font-family: var(--font-primary);
+    font-size: clamp(0.55rem, 0.8vw, 0.65rem);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: rgba(240, 238, 233, 0.6);
+    margin-bottom: 2px;
+  }
+
+  .pc-day {
+    font-family: var(--font-primary);
+    font-size: clamp(1.2rem, 2vw, 1.5rem);
+    font-weight: 600;
+    line-height: 1;
+    color: #f0eee9;
   }
 
   .ev-body {
     display: flex;
     flex-direction: column;
     gap: 2px;
+    flex-grow: 1;
     min-width: 0;
   }
 
   .ev-queen {
     font-family: var(--font-primary);
-    font-size: clamp(0.95rem, 1.5vw, 1.15rem);
+    font-size: clamp(0.85rem, 1.2vw, 1rem);
     font-weight: 700;
     color: #f0eee9;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    transition: color 0.35s ease;
+    transition: color 0.35s ease, transform 0.35s ease;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .ev-show {
     font-family: var(--font-primary);
-    font-size: clamp(0.75rem, 1vw, 0.85rem);
+    font-size: clamp(0.7rem, 1vw, 0.8rem);
     color: rgba(240, 238, 233, 0.5);
     letter-spacing: 0.03em;
     overflow-wrap: anywhere;
   }
 
+  .ev-venue-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    margin-top: 2px;
+  }
+
   .ev-venue {
     font-family: var(--font-primary);
-    font-size: 0.7rem;
-    color: rgba(240, 238, 233, 0.25);
+    font-size: clamp(0.65rem, 0.9vw, 0.7rem);
+    color: rgba(240, 238, 233, 0.3);
     font-style: italic;
-    overflow-wrap: anywhere;
   }
 
   .ev-actions {
+    flex-shrink: 0;
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 0.75rem;
-    padding-top: 2px;
+    align-items: center;
+    z-index: 1; /* Keep above sweep glow */
   }
 
   .ev-status {
@@ -221,9 +300,9 @@
     letter-spacing: 0.25em;
     text-transform: uppercase;
     color: rgba(180, 240, 190, 0.9);
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.3rem;
   }
 
   .ev-status::before {
@@ -241,39 +320,57 @@
   }
 
   .ev-status.sold-out {
-    color: rgba(240, 238, 233, 0.15);
+    color: rgba(240, 238, 233, 0.25);
   }
 
   .ev-status.limited {
-    color: rgba(240, 238, 233, 0.6);
+    color: rgba(240, 238, 233, 0.7);
   }
 
   .ev-link {
     font-family: var(--font-primary);
-    font-size: 0.6rem;
+    font-size: clamp(0.6rem, 0.8vw, 0.7rem);
     font-weight: 500;
-    letter-spacing: 0.16em;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: #f0eee9;
+    color: rgba(240, 238, 233, 0.8);
     text-decoration: none;
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.45rem 0.95rem;
+    padding: clamp(0.4rem, 0.8vw, 0.5rem) clamp(0.7rem, 1.2vw, 1rem);
     border: 1px solid rgba(240, 238, 233, 0.15);
-    border-radius: 999px;
-    background: transparent;
+    background: rgba(240, 238, 233, 0.03);
+    border-radius: 4px; /* Editorial Sharp Corners */
     transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    white-space: nowrap;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .ev-link::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(240, 238, 233, 1);
+    transform: scaleX(0);
+    transform-origin: right;
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: -1;
   }
 
   .ev-link:hover {
-    color: #111111;
-    background: #f0eee9;
-    border-color: #f0eee9;
+    color: #000000;
+    border-color: rgba(240, 238, 233, 1);
+  }
+
+  .ev-link:hover::before {
+    transform: scaleX(1);
+    transform-origin: left;
   }
 
   .ev-row:hover .ev-queen {
-    transform: translateX(6px);
+    transform: translateX(4px);
     color: #ffffff;
   }
 
@@ -283,7 +380,7 @@
 
   .ev-footer p {
     font-family: var(--font-primary);
-    font-size: 0.6rem;
+    font-size: 0.75rem;
     color: rgba(240, 238, 233, 0.2);
     letter-spacing: 0.08em;
     margin: 0;
@@ -291,8 +388,8 @@
 
   .close-btn-left {
     position: absolute;
-    top: 1.25rem;
-    left: 1.25rem;
+    top: calc(1.25rem + env(safe-area-inset-top));
+    left: calc(1.25rem + env(safe-area-inset-left));
     width: 44px;
     height: 44px;
     border: none;
@@ -301,7 +398,7 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    z-index: 3;
+    z-index: 100;
   }
 
   .close-btn-left svg.close-icon {
@@ -310,53 +407,18 @@
     transition: transform 0.4s cubic-bezier(0.32, 0, 0.15, 1);
   }
 
-  .close-btn-left {
-    opacity: 0;
-    pointer-events: none;
-    transform: translate(-50%, -50%) scale(0);
-    /* Fast exit transition (No Ghosting) */
-    transition: 
-      transform 0.1s ease,
-      opacity 0.1s ease;
-    transition-delay: 0s;
-  }
-
-  .close-btn-left.is-visible {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-    pointer-events: auto;
-    /* Snappier entrance: overlaps with layout end */
-    transition: 
-      transform 0.4s var(--anim-layout-easing),
-      opacity 0.3s ease;
-    transition-delay: calc(var(--anim-layout-duration) - 0.2s);
-  }
-
-  .close-icon path {
-    stroke-dasharray: 30;
-    stroke-dashoffset: 30;
-    /* Drawing animation only on entrance */
-    transition: stroke-dashoffset 0.4s ease;
-  }
-
-  /* Reset paths instantly on exit to prevent ghosting */
-  .close-btn-left:not(.is-visible) .close-icon path {
-    transition: none;
-    stroke-dashoffset: 30;
-  }
-
-  .is-visible .line-1 {
-    transition-delay: calc(var(--anim-layout-duration) - 0.05s);
-    stroke-dashoffset: 0;
-  }
-
-  .is-visible .line-2 {
-    transition-delay: calc(var(--anim-layout-duration) + 0.1s);
-    stroke-dashoffset: 0;
+  .close-btn-left svg.close-icon path {
+    transition: stroke 0.3s ease;
   }
 
   .close-btn-left:hover svg.close-icon {
     transform: rotate(180deg) scale(1.1);
+  }
+
+  /* Prevent lag during window resize */
+  .close-btn-left.no-transition {
+    transition: none !important;
+    transition-delay: 0s !important;
   }
 
   @media (min-width: 1024px) {
@@ -366,9 +428,9 @@
       width: 38px;
       height: 38px;
       padding: 0;
-      background: #ffffff;
+      background: var(--color-white);
       border-radius: 50%;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      box-shadow: 0 4px 12px rgba(var(--color-bg-rgb), 0.3);
       transform: translate(-50%, -50%);
     }
 
@@ -378,65 +440,57 @@
     }
 
     .close-btn-left svg path {
-      stroke: #111111;
+      stroke: var(--color-bg-alt);
     }
 
     .close-btn-left:hover {
-      background: #ffffff;
+      background: var(--color-white);
       transform: translate(-50%, -50%) scale(1.1);
     }
     
     .close-btn-left:hover svg path {
-      stroke: #111111;
+      stroke: var(--color-bg-alt);
     }
   }
 
-  /* Prevent lag during window resize */
-  .close-btn-left.no-transition {
-    transition: none !important;
-    transition-delay: 0s !important;
-  }
-
-  @media (max-width: 768px) {
+  @media (max-width: 1024px) {
     .events-backdrop {
-      align-items: flex-start;
-      justify-content: flex-start;
-      padding-top: 6.5rem;
-      padding-left: var(--events-content-offset);
-      padding-right: max(1rem, calc(100vw - var(--events-panel-width) + 1rem));
+      /* Mobile safe zones: Clear the top-left X button + Mobile Notches */
+      padding-top: calc(clamp(5.5rem, 10vh, 7rem) + env(safe-area-inset-top));
+      padding-bottom: calc(clamp(2rem, 4vh, 4rem) + env(safe-area-inset-bottom));
     }
 
     .events-nav {
-      max-width: 100%;
+      width: 100%;
+      max-width: 32rem;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .ev-link span {
+      display: none;
     }
 
-    .ev-header {
-      margin-bottom: 1.75rem;
+    .ev-link {
+      padding: 0.5rem;
+      border-radius: 50%;
+      justify-content: center;
     }
 
     .ev-row {
-      grid-template-columns: minmax(3.5rem, 4rem) minmax(0, 1fr);
-      grid-template-areas:
-        "date body"
-        "actions actions";
-      gap: 0.35rem 0.75rem;
-      padding: 1.15rem 0;
+      gap: 0.5rem;
+      padding: 0.75rem;
     }
 
-    .ev-date { grid-area: date; }
-    .ev-body { grid-area: body; gap: 0.15rem; }
-    .ev-queen { font-size: 1.05rem; }
-
-    .ev-actions {
-      grid-area: actions;
-      flex-direction: row;
-      justify-content: space-between;
-      align-items: center;
-      width: 100%;
-      margin-top: 0.25rem;
-      padding-top: 0.85rem;
-      border-top: 1px dashed rgba(240, 238, 233, 0.1);
+    .pc-date-box {
+      min-width: 3.5rem;
+      padding: 0.5rem;
     }
-    .ev-status { margin-top: 0; }
+  }
+
+  @media (hover: none), (pointer: coarse) {
+    .ev-row:hover {
+      transform: none;
+    }
   }
 </style>
