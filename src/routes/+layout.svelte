@@ -9,6 +9,7 @@
   import Menu from "$lib/components/Menu.svelte";
   import EventsPanel from "$lib/components/EventsPanel.svelte";
   import { menuOpen, leftMenuOpen, isNavReady } from "$lib/stores/menu";
+  import { wrapperScroll } from "$lib/stores/scroll.svelte";
   import { i18n } from "$lib/i18n.svelte";
 
   let { children } = $props();
@@ -108,6 +109,7 @@
     }
 
     lenis.on("scroll", (e: any) => {
+      wrapperScroll.y = e.scroll;
       const progressBar = document.querySelector(
         ".scroll-progress-bar",
       ) as HTMLElement | null;
@@ -130,6 +132,7 @@
 
   afterNavigate(() => {
     lenis?.scrollTo(0, { immediate: true });
+    wrapperScroll.y = 0;
     menuOpen.set(false);
     leftMenuOpen.set(false);
     lenis?.start();

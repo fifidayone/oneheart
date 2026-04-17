@@ -32,3 +32,10 @@ vite.config.ts.timestamp-*
 .agents
 .codex
 .superpowers
+/AGENTS.md
+/CLAUDE.md
+/GEMINI.md
+/GEMINI..md
+/gemini.md
+/claude.md
+/agents.md
