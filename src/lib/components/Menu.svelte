@@ -4,7 +4,7 @@
   import { draw, scale } from "svelte/transition";
   import { expoOut } from "svelte/easing";
 
-  let { lenis } = $props<{ lenis: any }>();
+  let { lenis, isResizing = false } = $props<{ lenis: any, isResizing?: boolean }>();
 
   function closeMenu() {
     menuOpen.set(false);
@@ -23,23 +23,23 @@
   </nav>
 </div>
 
-{#if $menuOpen}
 <button
   class="close-btn"
-  in:scale={{ duration: 150, delay: 50, easing: expoOut }}
+  class:is-visible={$menuOpen}
+  class:no-transition={isResizing}
   onclick={closeMenu}
   aria-label="Close menu"
 >
   <svg class="close-icon" viewBox="0 0 24 24" fill="none">
     <path
-      in:draw={{ duration: 250, delay: 300 }}
+      class="line-1"
       d="M3 3L21 21"
       stroke="#f0eee9"
       stroke-width="2.2"
       stroke-linecap="round"
     />
     <path
-      in:draw={{ duration: 250, delay: 450 }}
+      class="line-2"
       d="M21 3L3 21"
       stroke="#f0eee9"
       stroke-width="2.2"
@@ -47,13 +47,12 @@
     />
   </svg>
 </button>
-{/if}
 
 <style>
   .menu-backdrop {
     position: fixed;
     inset: 0;
-    background: #121212;
+    background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(226, 232, 240, 0.15), transparent 70%), #000000;
     display: flex;
     align-items: center;
     padding-left: calc(100vw - var(--menu-width) + var(--menu-content-offset));
@@ -162,16 +161,58 @@
     transition: transform 0.4s cubic-bezier(0.32, 0, 0.15, 1);
   }
 
+  .close-btn {
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, -50%) scale(0);
+    /* Fast exit transition (No Ghosting) */
+    transition: 
+      transform 0.1s ease,
+      opacity 0.1s ease;
+    transition-delay: 0s;
+  }
+
+  .close-btn.is-visible {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    pointer-events: auto;
+    /* Snappier entrance: overlaps with layout end */
+    transition: 
+      transform 0.4s var(--anim-layout-easing),
+      opacity 0.3s ease;
+    transition-delay: calc(var(--anim-layout-duration) - 0.2s);
+  }
+
+  .close-icon path {
+    stroke-dasharray: 30;
+    stroke-dashoffset: 30;
+    /* Drawing animation only on entrance */
+    transition: stroke-dashoffset 0.4s ease;
+  }
+
+  /* Reset paths instantly on exit to prevent ghosting */
+  .close-btn:not(.is-visible) .close-icon path {
+    transition: none;
+    stroke-dashoffset: 30;
+  }
+
+  .is-visible .line-1 {
+    transition-delay: calc(var(--anim-layout-duration) - 0.05s);
+    stroke-dashoffset: 0;
+  }
+
+  .is-visible .line-2 {
+    transition-delay: calc(var(--anim-layout-duration) + 0.1s);
+    stroke-dashoffset: 0;
+  }
+
   .close-btn svg.close-icon path {
     transition: stroke 0.3s ease;
   }
 
+  /* Hover scale shared across resolutions */
   .close-btn:hover svg.close-icon {
     transform: rotate(180deg) scale(1.1);
-  }
-
-  .close-btn:hover svg.close-icon path {
-    stroke: #ffffff;
   }
 
   @media (min-width: 1024px) {
@@ -198,12 +239,20 @@
     }
 
     .close-btn:hover {
-      background: #f0eee9;
+      background: #ffffff;
+      transform: translate(-50%, -50%) scale(1.1);
     }
 
     .close-btn:hover svg path {
+      /* Keep black stroke on white background for desktop */
       stroke: #111111;
     }
+  }
+
+  /* Prevent lag during window resize */
+  .close-btn.no-transition {
+    transition: none !important;
+    transition-delay: 0s !important;
   }
 
   @media (max-width: 768px) {

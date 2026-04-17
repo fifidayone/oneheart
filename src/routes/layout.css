@@ -7,20 +7,24 @@
   --font-primary: "Outfit", "IBM Plex Sans Thai", "Noto Sans TC", sans-serif;
   --font-heading: "Clash Display", sans-serif;
 
+  /* Motion Tokens */
+  --anim-layout-duration: 0.6s;
+  --anim-layout-easing: cubic-bezier(0.22, 1, 0.36, 1);
+
   font-family: var(--font-primary);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  color: #0b0f18;
-  background: #eff2f4;
+  color: #f0eee9; /* Adjust default text color to be light since background is now dark */
+  background: #000000;
 }
 
 html,
 body {
   margin: 0;
   min-height: 100%;
-  background: #eff2f4;
-  color: #0b0f18;
+  background: #000000;
+  color: #f0eee9;
 }
 
 body {

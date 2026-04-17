@@ -29,3 +29,4 @@ vite.config.ts.timestamp-*
 .orchids
 .vscode
 .claude
+.agents

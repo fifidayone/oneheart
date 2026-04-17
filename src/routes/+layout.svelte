@@ -109,9 +109,9 @@
   <link rel="icon" href={favicon} />
 </svelte:head>
 
-<Menu {lenis} />
+<Menu {lenis} {isResizing} />
 
-<EventsPanel {lenis} />
+<EventsPanel {lenis} {isResizing} />
 
 <!-- Scroll Progress Bar -->
 <div class="scroll-progress-container" class:visible={showScrollbar}>
@@ -257,7 +257,7 @@
   :global(body) {
     margin: 0;
     padding: 0;
-    background: #111111;
+    background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(226, 232, 240, 0.15), transparent 70%), #000000;
     overflow: hidden;
     overscroll-behavior: none; /* สกัดบั๊กหน้าต่างกระเด้ง(Bounce) และ Trackpad Jitter บน Mac/Windows */
     touch-action: pan-y; /* สกัดการทำงานของ Pinch-to-zoom ระดับ CSS */
@@ -301,29 +301,43 @@
     z-index: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    background: #111111; /* เติมสีพื้นหลังเพื่อกลบเส้นขอบที่อาจเกิดจากการย่อส่วน */
+    background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(226, 232, 240, 0.1), transparent 70%), #000000; /* Sophisticated subtle Pearl Mist glow for content container */
     -ms-overflow-style: none; /* IE and Edge */
     scrollbar-width: none; /* Firefox */
     transform-origin: right center; /* Default for Right Menu */
     transition:
-      transform 0.6s cubic-bezier(0.22, 1, 0.36, 1),
-      border-radius 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      transform var(--anim-layout-duration) var(--anim-layout-easing),
+      border-radius var(--anim-layout-duration) var(--anim-layout-easing);
   }
 
   .page-wrapper.is-open {
     transform-origin: right center !important;
     transform: translateX(calc(-1 * var(--menu-width))) scale(var(--menu-scale));
-    border-radius: clamp(12px, 2vw, 24px);
+    border-radius: 0; 
+    border: none; /* Remove simple border for best practice lighting */
     pointer-events: none;
     overflow: hidden;
+    /* Enhanced Ultra-Elevation: Deep Multi-Layered Shadows + Symmetrical Rim Lighting */
+    box-shadow: 
+      -60px 80px 140px rgba(0, 0, 0, 0.95), /* Deep Ambient Shadow */
+      0 0 0 1px rgba(240, 238, 233, 0.12),   /* Continuous thin edge */
+      inset 0 1.5px 0.5px rgba(240, 238, 233, 0.3), /* Top Rim Light (From Pearl Mist) */
+      inset 0 -1px 0 rgba(240, 238, 233, 0.08); /* Bottom Reflected Light (Floor Reflection to avoid sinking) */
   }
 
   .page-wrapper.is-left-open {
     transform-origin: left center !important;
     transform: translateX(var(--events-panel-width)) scale(var(--events-panel-scale));
-    border-radius: clamp(12px, 2vw, 24px);
+    border-radius: 0;
+    border: none;
     pointer-events: none;
     overflow: hidden;
+    /* Enhanced Ultra-Elevation: Symmetrical Deep Shadows with Multi-Rim Lighting */
+    box-shadow: 
+      60px 80px 140px rgba(0, 0, 0, 0.95), 
+      0 0 0 1px rgba(240, 238, 233, 0.12),
+      inset 0 1.5px 0.5px rgba(240, 238, 233, 0.3), /* Top Rim */
+      inset 0 -1px 0 rgba(240, 238, 233, 0.08); /* Bottom Reflected Light */
   }
 
   .page-wrapper.is-open *, 

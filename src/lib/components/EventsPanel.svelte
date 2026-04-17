@@ -4,7 +4,7 @@
   import { fade, fly, draw, scale } from "svelte/transition";
   import { expoOut } from "svelte/easing";
 
-  let { lenis } = $props<{ lenis: any }>();
+  let { lenis, isResizing = false } = $props<{ lenis: any, isResizing?: boolean }>();
   const events = [
     { date: "JUN 04", day: "THU", time: "19:15", title: "GAWDLAND Down Under", queen: "Melbourne", venue: "Chasers", status: "AVAILABLE", url: "https://events.humanitix.com/gawdland-mel/tickets" },
     { date: "JUN 06", day: "SAT", time: "18:45", title: "GAWDLAND Down Under", queen: "Sydney", venue: "Universal", status: "AVAILABLE", url: "https://events.humanitix.com/gawdland-syd/tickets" },
@@ -62,23 +62,23 @@
   </nav>
 </div>
 
-{#if $leftMenuOpen}
 <button
   class="close-btn-left"
-  in:scale={{ duration: 150, delay: 50, easing: expoOut }}
+  class:is-visible={$leftMenuOpen}
+  class:no-transition={isResizing}
   onclick={closePanel}
   aria-label="Close events"
 >
   <svg class="close-icon" viewBox="0 0 24 24" fill="none">
     <path
-      in:draw={{ duration: 250, delay: 300 }}
+      class="line-1"
       d="M3 3L21 21"
       stroke="#f0eee9"
       stroke-width="2.2"
       stroke-linecap="round"
     />
     <path
-      in:draw={{ duration: 250, delay: 450 }}
+      class="line-2"
       d="M21 3L3 21"
       stroke="#f0eee9"
       stroke-width="2.2"
@@ -86,13 +86,12 @@
     />
   </svg>
 </button>
-{/if}
 
 <style>
   .events-backdrop {
     position: fixed;
     inset: 0;
-    background: #121212;
+    background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(226, 232, 240, 0.15), transparent 70%), #000000;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -114,27 +113,6 @@
     width: 100%;
     max-width: min(100%, 26.25rem);
     gap: 0;
-  }
-
-  /* --- Animation Classes --- */
-  .ev-animate {
-    opacity: 0;
-    transform: translateY(20px);
-    filter: blur(8px);
-    transition: opacity 0.4s ease, transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), filter 0.4s ease;
-    transition-delay: 0s;
-  }
-
-  .events-nav.is-open .ev-animate {
-    opacity: 1;
-    transform: translateY(0);
-    filter: blur(0);
-    transition-delay: var(--anim-delay, 0.1s);
-  }
-
-  .events-nav:not(.is-open) .ev-animate {
-    transition-delay: 0s;
-    transition-duration: 0.3s;
   }
 
   .ev-header {
@@ -332,16 +310,53 @@
     transition: transform 0.4s cubic-bezier(0.32, 0, 0.15, 1);
   }
 
-  .close-btn-left svg.close-icon path {
-    transition: stroke 0.3s ease;
+  .close-btn-left {
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, -50%) scale(0);
+    /* Fast exit transition (No Ghosting) */
+    transition: 
+      transform 0.1s ease,
+      opacity 0.1s ease;
+    transition-delay: 0s;
+  }
+
+  .close-btn-left.is-visible {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    pointer-events: auto;
+    /* Snappier entrance: overlaps with layout end */
+    transition: 
+      transform 0.4s var(--anim-layout-easing),
+      opacity 0.3s ease;
+    transition-delay: calc(var(--anim-layout-duration) - 0.2s);
+  }
+
+  .close-icon path {
+    stroke-dasharray: 30;
+    stroke-dashoffset: 30;
+    /* Drawing animation only on entrance */
+    transition: stroke-dashoffset 0.4s ease;
+  }
+
+  /* Reset paths instantly on exit to prevent ghosting */
+  .close-btn-left:not(.is-visible) .close-icon path {
+    transition: none;
+    stroke-dashoffset: 30;
+  }
+
+  .is-visible .line-1 {
+    transition-delay: calc(var(--anim-layout-duration) - 0.05s);
+    stroke-dashoffset: 0;
+  }
+
+  .is-visible .line-2 {
+    transition-delay: calc(var(--anim-layout-duration) + 0.1s);
+    stroke-dashoffset: 0;
   }
 
   .close-btn-left:hover svg.close-icon {
     transform: rotate(180deg) scale(1.1);
-  }
-
-  .close-btn-left:hover svg.close-icon path {
-    stroke: #ffffff;
   }
 
   @media (min-width: 1024px) {
@@ -367,12 +382,19 @@
     }
 
     .close-btn-left:hover {
-      background: #f0eee9;
+      background: #ffffff;
+      transform: translate(-50%, -50%) scale(1.1);
     }
-
+    
     .close-btn-left:hover svg path {
       stroke: #111111;
     }
+  }
+
+  /* Prevent lag during window resize */
+  .close-btn-left.no-transition {
+    transition: none !important;
+    transition-delay: 0s !important;
   }
 
   @media (max-width: 768px) {
