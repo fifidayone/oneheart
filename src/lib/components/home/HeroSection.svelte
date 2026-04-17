@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import FeaturedToast from "$lib/components/home/FeaturedToast.svelte";
   import { wrapperScroll } from "$lib/stores/scroll.svelte";
+  import { i18n } from "$lib/i18n.svelte";
 
   let videoReady = $state(false);
   let videoEl: HTMLVideoElement | undefined = $state();
@@ -46,7 +47,7 @@
 <div class="home">
   <div class="video-background">
     <img
-      src="/hero/hero-poster.avif"
+      src="/media/hero-poster.avif?v=3"
       alt=""
       class="hero-poster"
       class:hidden={videoReady}
@@ -56,7 +57,7 @@
 
     <video
       {@attach captureVideo}
-      poster="/hero/hero-poster.avif?v=3"
+      poster="/media/hero-poster.avif?v=3"
       autoplay
       muted
       loop
@@ -69,7 +70,7 @@
       class:ready={videoReady}
     >
       <source src="/media/hero-video.mp4?v=3" type="video/mp4" />
-      Your browser does not support the video tag.
+      {i18n.t("video_fallback")}
     </video>
   </div>
 
@@ -79,8 +80,8 @@
     class="center-content"
     style:transform="translateY({textTranslateY}px) scale({textScale})"
   >
-    <p class="top-label">Power As One</p>
-    <h1>ONE HEART<br />PRODUCTIONS</h1>
+    <p class="top-label">{i18n.t("hero_eyebrow")}</p>
+    <h1>{i18n.t("hero_title_line1")}<br />{i18n.t("hero_title_line2")}</h1>
   </div>
 
   <FeaturedToast />
@@ -134,13 +135,12 @@
     object-fit: cover;
     transform: translate(-50%, -50%);
     pointer-events: none;
-    will-change: opacity, filter;
+    will-change: opacity;
   }
 
   .hero-poster {
     z-index: 1;
     opacity: 1;
-    filter: brightness(0.6) contrast(1.1);
     transition: opacity 2s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
@@ -151,25 +151,37 @@
   .hero-video {
     z-index: 2;
     opacity: 0;
-    filter: brightness(0.8) contrast(1.1);
-    transition:
-      opacity 2.5s cubic-bezier(0.16, 1, 0.3, 1),
-      filter 2.5s ease;
+    transition: opacity 2.5s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .hero-video.ready {
     opacity: 1;
-    filter: brightness(0.7) contrast(1.15);
   }
 
   .overlay {
     position: absolute;
     inset: 0;
-    background: radial-gradient(
-      circle at center,
-      rgba(10, 10, 11, 0.4) 0%,
-      rgba(10, 10, 11, 0.92) 100%
-    );
+    background:
+      linear-gradient(
+        180deg,
+        rgba(10, 10, 11, 0.18) 0%,
+        rgba(10, 10, 11, 0.1) 22%,
+        rgba(10, 10, 11, 0.18) 52%,
+        rgba(10, 10, 11, 0.34) 100%
+      ),
+      linear-gradient(
+        90deg,
+        rgba(10, 10, 11, 0.22) 0%,
+        rgba(10, 10, 11, 0.06) 24%,
+        rgba(10, 10, 11, 0.06) 76%,
+        rgba(10, 10, 11, 0.22) 100%
+      ),
+      radial-gradient(
+        circle at center,
+        rgba(10, 10, 11, 0.34) 0%,
+        rgba(10, 10, 11, 0.7) 64%,
+        rgba(10, 10, 11, 0.95) 100%
+      );
     z-index: 1;
     pointer-events: none;
   }

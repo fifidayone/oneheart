@@ -8,36 +8,32 @@
   import type Lenis from "lenis";
   import Menu from "$lib/components/Menu.svelte";
   import EventsPanel from "$lib/components/EventsPanel.svelte";
-  import { menuOpen, leftMenuOpen, isNavReady } from "$lib/stores/menu";
+  import { menuState } from "$lib/stores/menu.svelte";
   import { wrapperScroll } from "$lib/stores/scroll.svelte";
   import { i18n } from "$lib/i18n.svelte";
 
   let { children } = $props();
   let lenis: Lenis | undefined = $state();
-  const NAV_READY_FALLBACK_MS = 700;
-  let navReadyTimeout: ReturnType<typeof setTimeout> | undefined;
   let rafId: number | undefined;
 
-  function clearNavReadyTimer() {
-    if (navReadyTimeout) {
-      clearTimeout(navReadyTimeout);
-      navReadyTimeout = undefined;
-    }
-  }
+
 
   function openMenu() {
-    isNavReady.set(false); // Reset before animation
-    leftMenuOpen.set(false);
-    menuOpen.set(true);
+    menuState.isNavReady = false;
+    menuState.isLeftOpen = false;
+    menuState.isOpen = true;
     lenis?.stop();
   }
 
   function openLeftMenu() {
-    isNavReady.set(false); // Reset before animation
-    menuOpen.set(false);
-    leftMenuOpen.set(true);
+    menuState.isNavReady = false;
+    menuState.isOpen = false;
+    menuState.isLeftOpen = true;
     lenis?.stop();
   }
+
+  let scrollProgress = $derived(Math.min(1, Math.max(0, wrapperScroll.y / wrapperScroll.limit)));
+
 
   let showScrollbar = $state(false);
   let scrollTimeout: ReturnType<typeof setTimeout>;
@@ -45,23 +41,26 @@
   let isResizing = $state(false);
   let resizeTimeout: ReturnType<typeof setTimeout>;
 
+  // CSS transition duration for layout panels (must match --anim-layout-duration in layout.css)
+  const LAYOUT_TRANSITION_MS = 600;
+
+  // Bulletproof Deterministic Navigation Readiness
+  // Uses $effect cleanup (Svelte 5 best practice) to auto-clear timers on re-run or destroy.
   $effect(() => {
-    const isPanelOpen = $menuOpen || $leftMenuOpen;
+    if (menuState.isOpen || menuState.isLeftOpen) {
+      const timeout = setTimeout(() => {
+        menuState.isNavReady = true;
+      }, LAYOUT_TRANSITION_MS + 20);
 
-    clearNavReadyTimer();
-
-    if (isPanelOpen) {
-      navReadyTimeout = setTimeout(() => {
-        isNavReady.set(true);
-        navReadyTimeout = undefined;
-      }, NAV_READY_FALLBACK_MS);
+      // Svelte 5: cleanup runs on re-trigger or component destroy
+      return () => clearTimeout(timeout);
     } else {
-      isNavReady.set(false);
+      menuState.isNavReady = false;
     }
   });
 
   function handleResize() {
-    if (!$menuOpen && !$leftMenuOpen) return;
+    if (!menuState.isOpen && !menuState.isLeftOpen) return;
     isResizing = true;
     clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(() => {
@@ -69,29 +68,7 @@
     }, 150);
   }
 
-  function handlePinchZoomBlock(event: WheelEvent) {
-    if (event.ctrlKey) {
-      event.preventDefault();
-    }
-  }
-
-  function syncNavReady() {
-    clearNavReadyTimer();
-    isNavReady.set($menuOpen || $leftMenuOpen);
-  }
-
-  function handlePageWrapperTransition(event: TransitionEvent) {
-    if (event.target !== event.currentTarget || event.propertyName !== "transform") {
-      return;
-    }
-
-    syncNavReady();
-  }
-
   onMount(async () => {
-    // Lock Pinch-to-Zoom อย่างเด็ดขาดตามการตัดสินใจ
-    document.addEventListener("wheel", handlePinchZoomBlock, { passive: false });
-
     window.addEventListener("resize", handleResize);
 
     const LenisLib = (await import("lenis")).default;
@@ -110,15 +87,7 @@
 
     lenis.on("scroll", (e: any) => {
       wrapperScroll.y = e.scroll;
-      const progressBar = document.querySelector(
-        ".scroll-progress-bar",
-      ) as HTMLElement | null;
-      if (progressBar && e.limit > 0) {
-        // Use Math.min/max to clamp perfectly from 0.0 to 1.0 (eliminates 99.6 hack)
-        const progress = Math.min(1, Math.max(0, e.scroll / e.limit));
-        // Use GPU-accelerated standard scaleX instead of layout-breaking width%
-        progressBar.style.transform = `scaleX(${progress})`;
-      }
+      wrapperScroll.limit = e.limit;
 
       showScrollbar = true;
       clearTimeout(scrollTimeout);
@@ -133,8 +102,8 @@
   afterNavigate(() => {
     lenis?.scrollTo(0, { immediate: true });
     wrapperScroll.y = 0;
-    menuOpen.set(false);
-    leftMenuOpen.set(false);
+    menuState.isOpen = false;
+    menuState.isLeftOpen = false;
     lenis?.start();
   });
 
@@ -142,12 +111,8 @@
     lenis?.destroy();
     clearTimeout(scrollTimeout);
     clearTimeout(resizeTimeout);
-    clearNavReadyTimer();
     if (rafId) {
       cancelAnimationFrame(rafId);
-    }
-    if (typeof document !== "undefined") {
-      document.removeEventListener("wheel", handlePinchZoomBlock);
     }
     if (typeof window !== "undefined") {
       window.removeEventListener("resize", handleResize);
@@ -165,13 +130,13 @@
 
 <!-- Scroll Progress Bar -->
 <div class="scroll-progress-container" class:visible={showScrollbar}>
-  <div class="scroll-progress-bar"></div>
+  <div class="scroll-progress-bar" style:transform="scaleX({scrollProgress})"></div>
 </div>
 
 <div
   class="layout-shell"
-  class:is-open={$menuOpen}
-  class:is-left-open={$leftMenuOpen}
+  class:is-open={menuState.isOpen}
+  class:is-left-open={menuState.isLeftOpen}
 >
   <div class="sticky-header-wrapper">
     <header class="site-header">
@@ -180,7 +145,7 @@
         <button
           class="nav-btn left-trigger mobile-only"
           onclick={openLeftMenu}
-          aria-label="Open events"
+          aria-label={i18n.t("aria_open_events")}
         >
           <div class="nav-lines events-icon">
             <span class="line top-line"></span>
@@ -198,7 +163,7 @@
         <button
           class="nav-btn right-trigger mobile-only"
           onclick={openMenu}
-          aria-label="Open menu"
+          aria-label={i18n.t("aria_open_menu")}
         >
           <span class="nav-text-persistent">{i18n.t("nav_menu")}</span>
           <div class="nav-lines">
@@ -212,36 +177,33 @@
 
   <!-- Vertical Nav Labels (Desktop only) -->
   <div class="vertical-label-container left desktop-only">
-    <button class="v-label" onclick={openLeftMenu}>
+    <button class="v-label" onclick={openLeftMenu} aria-label="Open events panel">
       <span>{i18n.t("nav_events")}</span>
     </button>
   </div>
 
   <div class="vertical-label-container right desktop-only">
-    <button class="v-label" onclick={openMenu}>
+    <button class="v-label" onclick={openMenu} aria-label="Open navigation menu">
       <span>{i18n.t("nav_menu")}</span>
     </button>
   </div>
 
-  <div
-    class="page-wrapper"
-    class:is-open={$menuOpen}
-    class:is-left-open={$leftMenuOpen}
-    class:no-transition={isResizing}
-    ontransitionend={handlePageWrapperTransition}
-    ontransitioncancel={handlePageWrapperTransition}
-  >
-
-  {#key $page.url.pathname}
     <div
-      in:fade={{ duration: 400, delay: 400 }}
-      out:fade={{ duration: 400 }}
-      style="display: contents"
+      class="page-wrapper"
+      class:is-open={menuState.isOpen}
+      class:is-left-open={menuState.isLeftOpen}
+      class:no-transition={isResizing}
     >
-      {@render children()}
+      {#key $page.url.pathname}
+        <div
+          in:fade={{ duration: 400, delay: 400 }}
+          out:fade={{ duration: 400 }}
+          style="display: contents"
+        >
+          {@render children()}
+        </div>
+      {/key}
     </div>
-  {/key}
-  </div>
 </div>
 
 <style>
@@ -311,9 +273,6 @@
     margin: 0;
     padding: 0;
     background: var(--color-bg);
-    overflow: hidden;
-    overscroll-behavior: none; /* สกัดบั๊กหน้าต่างกระเด้ง(Bounce) และ Trackpad Jitter บน Mac/Windows */
-    touch-action: pan-y; /* สกัดการทำงานของ Pinch-to-zoom ระดับ CSS */
   }
 
   .page-wrapper::-webkit-scrollbar {
@@ -364,7 +323,6 @@
   }
 
   .page-wrapper.is-open {
-    transform-origin: right center !important;
     transform: translateX(calc(-1 * var(--menu-width))) scale(var(--menu-scale));
     border-radius: 0;
     border: none; /* Remove simple border for best practice lighting */
@@ -373,7 +331,7 @@
     /* Pearl Mist Lighting: Dynamic Top Light (Point 2) increased to 0.35 for better 'lift' */
     box-shadow:
       0 0 0 1px rgba(var(--color-text-rgb), 0.1),
-      inset 0 2px 1.2px rgba(var(--color-text-rgb), 0.35),
+      inset 0 2px 1.2px var(--color-pearl-glow),
       inset 0 -0.8px 0 rgba(var(--color-text-rgb), 0.05);
   }
 
@@ -388,7 +346,7 @@
     /* Pearl Mist Lighting: Dynamic Top Light (Point 2) increased to 0.35 for better 'lift' */
     box-shadow:
       0 0 0 1px rgba(var(--color-text-rgb), 0.1),
-      inset 0 2px 1.2px rgba(var(--color-text-rgb), 0.35),
+      inset 0 2px 1.2px var(--color-pearl-glow),
       inset 0 -0.8px 0 rgba(var(--color-text-rgb), 0.05);
   }
 
@@ -625,20 +583,20 @@
     }
   }
 
-  /* --- HYBRID NAVIGATION RESPONSIVENESS (Forced overriders) --- */
-  .desktop-only {
-    display: block !important;
+  /* --- HYBRID NAVIGATION RESPONSIVENESS --- */
+  .layout-shell .desktop-only {
+    display: block;
   }
-  .mobile-only {
-    display: none !important;
+  .layout-shell .mobile-only {
+    display: none;
   }
 
   @media (max-width: 1024px) {
-    .desktop-only {
-      display: none !important;
+    .layout-shell .desktop-only {
+      display: none;
     }
-    .mobile-only {
-      display: flex !important;
+    .layout-shell .mobile-only {
+      display: flex;
     }
   }
 </style>

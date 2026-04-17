@@ -30,6 +30,10 @@
   --color-white-rgb: 255, 255, 255;
   --color-white: #ffffff;
 
+  /* Design System: Pearl Highlights */
+  --color-pearl-mist: rgba(var(--color-text-rgb), 0.15);
+  --color-pearl-glow: rgba(var(--color-text-rgb), 0.35);
+
   font-family: var(--font-primary);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;

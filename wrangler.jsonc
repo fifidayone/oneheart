@@ -14,7 +14,7 @@
 	"preview_urls": true,
 	"r2_buckets": [
 		{
-			"binding": "VIDEO_BUCKET",
+			"binding": "MEDIA_BUCKET",
 			"bucket_name": "drtf-media",
 			"remote": true
 		}

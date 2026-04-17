@@ -1,40 +1,78 @@
 <script lang="ts">
-  import { menuOpen, isNavReady } from "$lib/stores/menu";
+  import { menuState } from "$lib/stores/menu.svelte";
   import { i18n } from "$lib/i18n.svelte";
+  import { browser } from "$app/environment";
   import { draw, scale } from "svelte/transition";
   import { expoOut } from "svelte/easing";
-  import { browser } from "$app/environment";
 
   let { lenis, isResizing = false } = $props<{
     lenis: any;
     isResizing?: boolean;
   }>();
 
+  let firstLink: HTMLAnchorElement | undefined = $state();
+  let lastFocusedElement: HTMLElement | null = null;
+
+
   function closeMenu() {
-    menuOpen.set(false);
+    menuState.isOpen = false;
     lenis?.start();
   }
 
-  // Strict scroll lock to prevent bouncing on mobile
+  // Scroll Lock Management
   $effect(() => {
-    if (browser) {
-      if ($menuOpen) {
-        document.documentElement.style.overscrollBehavior = "none";
-        document.body.style.overscrollBehavior = "none";
-        document.body.style.overflow = "hidden";
-        document.body.style.touchAction = "none"; // Disable native touch scrolling globally while menu is open
-      } else {
-        document.documentElement.style.overscrollBehavior = "";
-        document.body.style.overscrollBehavior = "";
-        document.body.style.overflow = "";
-        document.body.style.touchAction = "";
+    if (!browser) return;
+    
+    if (menuState.isOpen) {
+      lastFocusedElement = document.activeElement as HTMLElement;
+      document.documentElement.style.overscrollBehavior = "none";
+      document.body.style.overscrollBehavior = "none";
+      document.body.style.overflow = "hidden";
+      document.body.style.touchAction = "none";
+    } else {
+      document.documentElement.style.overscrollBehavior = "";
+      document.body.style.overscrollBehavior = "";
+      document.body.style.overflow = "";
+      document.body.style.touchAction = "";
+      
+      if (lastFocusedElement) {
+        lastFocusedElement.focus();
+        lastFocusedElement = null;
       }
     }
   });
 
+  // Focus Management - Wait for transition readiness
+  $effect(() => {
+    if (menuState.isOpen && menuState.isNavReady) {
+      firstLink?.focus();
+    }
+  });
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (!menuState.isOpen) return;
+    
+    if (e.key === "Tab") {
+      const focusables = Array.from(document.querySelectorAll('.menu-backdrop.is-open a, .close-btn, .lang-switch-track button')) as HTMLElement[];
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+
+      if (e.shiftKey && document.activeElement === first) {
+        last.focus();
+        e.preventDefault();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        first.focus();
+        e.preventDefault();
+      }
+    } else if (e.key === "Escape") {
+      closeMenu();
+    }
+  }
+
+
   // Stop touchmove from bubbling up to browser UI
   function blockTouch(e: TouchEvent) {
-    if ($menuOpen) {
+    if (menuState.isOpen) {
       // In Svelte 5 we can't use preventDefault modifier easily on passive events,
       // but the CSS touch-action: none on body covers most cases.
       // We stop propagation just in case.
@@ -43,16 +81,20 @@
   }
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="menu-backdrop"
-  class:is-open={$menuOpen}
+  class:is-open={menuState.isOpen}
   class:no-transition={isResizing}
   ontouchmove={blockTouch}
+  onkeydown={handleKeydown}
+  role="dialog"
+  aria-modal="true"
+  aria-label="Main Navigation"
+  aria-hidden={!menuState.isOpen}
 >
-  <div class="menu-container" class:is-open={$menuOpen}>
+  <div class="menu-container" class:is-open={menuState.isOpen}>
     <nav class="menu-links">
-      <a href="/" onclick={closeMenu}><span>{i18n.t("menu_home")}</span></a>
+      <a href="/" onclick={closeMenu} bind:this={firstLink}><span>{i18n.t("menu_home")}</span></a>
       <a href="/about" onclick={closeMenu}
         ><span>{i18n.t("menu_about")}</span></a
       >
@@ -81,41 +123,44 @@
         ></div>
         <button
           class:active={i18n.currentLocale === "en"}
-          onclick={() => i18n.setLocale("en")}>EN</button
+          onclick={() => i18n.setLocale("en")}
+          aria-label="Switch to English">EN</button
         >
         <button
           class:active={i18n.currentLocale === "th"}
-          onclick={() => i18n.setLocale("th")}>TH</button
+          onclick={() => i18n.setLocale("th")}
+          aria-label="Switch to Thai">TH</button
         >
         <button
           class:active={i18n.currentLocale === "tw"}
-          onclick={() => i18n.setLocale("tw")}>TW</button
+          onclick={() => i18n.setLocale("tw")}
+          aria-label="Switch to Traditional Chinese">TW</button
         >
       </div>
     </div>
   </div>
 </div>
 
-{#if $menuOpen && $isNavReady}
+{#if menuState.isOpen}
   <button
     class="close-btn"
     class:no-transition={isResizing}
-    in:scale={{ duration: 150, delay: 0, easing: expoOut }}
+    in:scale={{ duration: 300, delay: 300, easing: expoOut }}
     onclick={closeMenu}
-    aria-label="Close menu"
+    aria-label={i18n.t("aria_close_menu")}
   >
     <svg class="close-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
-        in:draw={{ duration: 250, delay: 300 }}
+        in:draw={{ duration: 250, delay: 550 }}
         d="M3 3L21 21"
-        stroke="#f0eee9"
+        stroke="var(--color-text)"
         stroke-width="2.2"
         stroke-linecap="round"
       />
       <path
-        in:draw={{ duration: 250, delay: 450 }}
+        in:draw={{ duration: 250, delay: 650 }}
         d="M21 3L3 21"
-        stroke="#f0eee9"
+        stroke="var(--color-text)"
         stroke-width="2.2"
         stroke-linecap="round"
       />
@@ -133,7 +178,7 @@
     height: 100svh; /* Lock height on mobile to prevent address bar bouncing */
     background: radial-gradient(
         ellipse 80% 60% at 50% 0%,
-        rgba(226, 232, 240, 0.15),
+        var(--color-pearl-mist),
         transparent 70%
       ),
       var(--color-bg);
@@ -191,12 +236,23 @@
     margin: -0.75rem -1.5rem;
     opacity: 0;
     transform: translateY(20px);
-    filter: blur(8px);
+    filter: blur(4px);
     pointer-events: none;
     transition:
       opacity 0.4s ease,
       transform 0.6s cubic-bezier(0.16, 1, 0.3, 1),
       filter 0.4s ease;
+    border-radius: 4px;
+  }
+
+  /* Focus-visible styles for nav links - on-brand white glow */
+  .menu-links a:focus-visible {
+    outline: 2px solid var(--color-white);
+    outline-offset: 4px;
+    box-shadow: 0 0 20px rgba(var(--color-white-rgb), 0.4);
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
   }
 
   .menu-container.is-open a {
@@ -237,9 +293,9 @@
     display: inline-block;
     transform-origin: left center;
     transition:
-      transform 0.3s cubic-bezier(0.25, 1, 0.4, 1),
-      letter-spacing 0.3s cubic-bezier(0.25, 1, 0.4, 1),
-      font-size 0.4s cubic-bezier(0.32, 0, 0.15, 1),
+      transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+      letter-spacing 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+      font-size 0.4s cubic-bezier(0.22, 1, 0.36, 1),
       color 0.25s ease,
       text-shadow 0.25s ease,
       opacity 0.3s ease,
@@ -290,13 +346,14 @@
     background: rgba(10, 10, 10, 0.4);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(var(--color-text-rgb), 0.1);
+    border: 1px solid var(--color-pearl-mist);
     box-shadow:
       inset 0 1px 1px rgba(var(--color-text-rgb), 0.05),
       0 10px 30px rgba(0, 0, 0, 0.5);
     border-radius: 4px;
-    padding: 4px;
-    width: 44px;
+    padding: 6px;
+    gap: 4px;
+    width: 48px;
   }
 
   .lang-switch-track .slider {
@@ -329,7 +386,7 @@
   .lang-switch-track button {
     background: none;
     border: none;
-    padding: 1rem 0;
+    padding: 0.875rem 0;
     font-family: var(--font-primary);
     font-size: 0.7rem;
     font-weight: 500;
@@ -338,7 +395,8 @@
     cursor: pointer;
     transition:
       color 0.4s ease,
-      text-shadow 0.4s ease;
+      text-shadow 0.4s ease,
+      outline-offset 0.2s ease;
     text-transform: uppercase;
     position: relative;
     z-index: 2;
@@ -346,6 +404,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    border-radius: 2px;
+  }
+
+  /* Focus-visible styles for language switcher buttons - on-brand white glow */
+  .lang-switch-track button:focus-visible {
+    outline: 2px solid var(--color-white);
+    outline-offset: 2px;
+    box-shadow: 0 0 15px rgba(var(--color-white-rgb), 0.4);
   }
 
   .lang-switch-track button:hover {
@@ -359,7 +425,7 @@
   }
 
   .close-btn {
-    position: absolute;
+    position: fixed;
     top: calc(1.25rem + env(safe-area-inset-top));
     right: calc(1.25rem + env(safe-area-inset-right));
     width: 44px;
@@ -371,6 +437,15 @@
     justify-content: center;
     cursor: pointer;
     z-index: 100;
+    border-radius: 4px;
+    transition: box-shadow 0.2s ease;
+  }
+
+  /* Focus-visible styles for close button - on-brand white glow */
+  .close-btn:focus-visible {
+    outline: 2px solid var(--color-white);
+    outline-offset: 4px;
+    box-shadow: 0 0 20px rgba(var(--color-white-rgb), 0.5);
   }
 
   .close-btn svg.close-icon {

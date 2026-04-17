@@ -36,21 +36,25 @@
     };
   }
 
-  let activePhoto = $derived.by(() => {
-    if (metrics.range <= 0) {
-      return 0;
-    }
-
-    const progress = Math.min(
-      1,
-      Math.max(0, (wrapperScroll.y - metrics.top) / metrics.range),
-    );
-
-    return Math.min(
-      PHOTOS.length - 1,
-      Math.floor(progress * PHOTOS.length),
-    );
+  let scrollProgress = $derived.by(() => {
+    if (!metrics || metrics.range <= 0) return 0;
+    return Math.min(1, Math.max(0, (wrapperScroll.y - metrics.top) / metrics.range));
   });
+
+  // Phase 1 (Holding): 0.0 -> 0.30
+  // Phase 2 (Transition - Scale Reveal): 0.30 -> 0.46
+  let transitionProgress = $derived(
+    Math.min(1, Math.max(0, (scrollProgress - 0.30) / 0.16))
+  );
+
+  // Phase 3 (Photos sequence): 0.46 -> 1.0
+  let photoProgress = $derived(
+    Math.min(1, Math.max(0, (scrollProgress - 0.46) / 0.54))
+  );
+
+  let activePhoto = $derived(
+    Math.min(PHOTOS.length - 1, Math.floor(photoProgress * PHOTOS.length))
+  );
 
   onMount(() => {
     function updateMetrics() {
@@ -102,32 +106,34 @@
 </script>
 
 <div class="story-pin-outer" {@attach captureStoryPin}>
-  <section class="story-section">
+  <section class="story-section" style="--t-prog: {transitionProgress};">
     <div class="ambient-glow"></div>
     <div class="dot-pattern-bg"></div>
 
     <div class="story-container">
-      <div
-        class="typo-narrative"
-        class:revealed
-        {@attach captureStory}
-        data-lang={i18n.currentLocale}
-      >
-        {#each i18n.t("story_words") as word, i (`${i}-${word}`)}
+      <div class="typo-wrapper">
+        <div
+          class="typo-narrative"
+          class:revealed
+          {@attach captureStory}
+          data-lang={i18n.currentLocale}
+        >
+        {#each i18n.tArray("story_words") as word, i (`${i}-${word}`)}
           <span class="word" style="transition-delay: {0.05 + i * 0.04}s">
             {word}
           </span>
         {/each}
         <span
           class="word highlight aurora-text"
-          style="transition-delay: {0.05 + i18n.t('story_words').length * 0.04}s"
+          style="transition-delay: {0.05 + i18n.tArray('story_words').length * 0.04}s"
           data-text={i18n.t("story_highlight")}
         >
           {i18n.t("story_highlight")}
         </span>
       </div>
+    </div>
 
-      <div class="photo-canvas">
+    <div class="photo-canvas">
         <div class="canvas-grain"></div>
         <div class="canvas-corner tl"></div>
         <div class="canvas-corner tr"></div>
@@ -183,7 +189,7 @@
   }
 
   .story-pin-outer {
-    height: 400vh;
+    height: 500vh;
     position: relative;
   }
 
@@ -243,6 +249,12 @@
     grid-template-columns: 1.2fr 0.8fr;
     align-items: center;
     gap: 0;
+  }
+
+  .typo-wrapper {
+    --center-offset: 20vw;
+    transform: translateX(calc((1 - var(--t-prog, 1)) * var(--center-offset)));
+    will-change: transform, opacity;
   }
 
   .typo-narrative {
@@ -307,6 +319,7 @@
     transform: scale(1.05) translateY(-5px);
     transition-delay: 0s !important;
     transition-duration: 0.3s;
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
     text-shadow: 0 0 25px rgba(var(--color-white-rgb), 0.5);
     z-index: 10;
   }
@@ -329,7 +342,7 @@
     background-clip: text;
     display: inline-block;
     white-space: nowrap;
-    -webkit-text-stroke: 1px rgba(255, 255, 255, 0.1);
+    -webkit-text-stroke: 1px rgba(255, 255, 255, 0.06);
   }
 
   .typo-narrative .word.highlight.aurora-text::after {
@@ -342,7 +355,7 @@
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
-    filter: blur(24px);
+    filter: blur(18px);
     opacity: 0;
     transition: opacity 1.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
@@ -352,25 +365,29 @@
   }
 
   .typo-narrative.revealed .word.highlight.aurora-text::after {
-    opacity: 0.6;
+    opacity: 0.35;
     animation: aurora-flow 8s linear infinite;
   }
 
   .typo-narrative.revealed .word.highlight.aurora-text:hover {
     animation: aurora-flow 3s linear infinite;
     transform: scale(1.02) translateY(-2px);
-    text-shadow: 0 0 30px rgba(255, 42, 112, 0.4);
+    text-shadow: 0 0 18px rgba(255, 42, 112, 0.22);
   }
 
   .typo-narrative.revealed .word.highlight.aurora-text:hover::after {
-    opacity: 0.9;
-    filter: blur(32px);
+    opacity: 0.55;
+    filter: blur(24px);
     animation: aurora-flow 3s linear infinite;
   }
 
   .photo-canvas {
     position: relative;
     width: 100%;
+    /* Scale Reveal: Starts hidden and slightly smaller, then blooms in place */
+    opacity: var(--t-prog, 1);
+    transform: scale(calc(0.88 + 0.12 * var(--t-prog, 1)));
+    will-change: transform, opacity;
     max-width: 430px;
     justify-self: end;
     aspect-ratio: 4 / 5;
@@ -487,8 +504,8 @@
     opacity: 0;
     transform: scale(1.08);
     transition:
-      opacity 0.7s ease,
-      transform 0.7s cubic-bezier(0.25, 1, 0.3, 1);
+      opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+      transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
     will-change: transform, opacity;
   }
 
@@ -523,7 +540,13 @@
     pointer-events: none;
   }
 
-  @media (max-width: 900px) {
+  @media (max-width: 1024px) {
+    .typo-wrapper {
+      /* Drifts slightly upward and fades — stays close so no dead space */
+      transform: translateY(calc(var(--t-prog, 1) * -8vh));
+      opacity: calc(1 - var(--t-prog, 1));
+    }
+
     .typo-narrative {
       font-size: clamp(2rem, 8vw, 3.5rem);
       justify-content: center;
@@ -535,35 +558,46 @@
     .story-container {
       grid-template-columns: 1fr;
       padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
 
     .photo-canvas {
-      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      translate: -50% -50%;
+      /* Scale Reveal: blooms from its final position — zero travel distance, zero dead space */
+      transform: scale(calc(0.88 + 0.12 * var(--t-prog, 1)));
+      opacity: var(--t-prog, 1);
+      width: clamp(280px, 85vw, 430px);
+      z-index: 5;
+      box-shadow:
+        0 40px 100px -20px rgba(var(--color-bg-rgb), 0.9),
+        inset 0 0 60px rgba(var(--color-bg-rgb), 0.6),
+        0 0 0 1px rgba(var(--color-text-rgb), 0.04);
     }
 
     .story-pin-outer {
-      height: auto;
+      height: 500vh;
     }
 
     .story-section {
-      position: relative;
-      min-height: 100vh;
       height: 100vh;
       padding: 0 var(--fluid-edge);
-      display: flex;
-      align-items: center;
-      justify-content: center;
     }
   }
 
-  @media (min-width: 901px) and (max-width: 1280px) {
+  @media (min-width: 1025px) and (max-width: 1280px) {
     .story-container {
       grid-template-columns: 1fr 1fr;
       gap: 3rem;
     }
 
-    .typo-narrative {
-      font-size: clamp(2.2rem, 4vw, 3.5rem);
+    .typo-wrapper {
+      /* Grid is now 50/50. Column center is at 25vw. We need to push right by 25vw to reach screen center (50vw) */
+      --center-offset: 25vw;
     }
   }
 </style>

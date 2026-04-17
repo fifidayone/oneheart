@@ -117,7 +117,7 @@
     height: 5px;
     border-radius: 50%;
     background: var(--color-text);
-    animation: dot-pulse 1.2s cubic-bezier(0.25, 1, 0.5, 1) infinite;
+    animation: dot-pulse 1.2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
     flex-shrink: 0;
   }
 
@@ -127,7 +127,7 @@
     letter-spacing: 0.25em;
     text-transform: uppercase;
     font-weight: 500;
-    color: rgba(var(--color-text-rgb), 0.6);
+    color: rgba(var(--color-text-rgb), 0.75);
     line-height: 1.4;
     white-space: nowrap;
   }
@@ -171,7 +171,7 @@
     display: flex;
     align-items: center;
     gap: 0.6rem;
-    color: rgba(var(--color-text-rgb), 0.25);
+    color: rgba(var(--color-text-rgb), 0.35);
     transition:
       color 0.4s cubic-bezier(0.32, 0, 0.15, 1),
       transform 0.4s cubic-bezier(0.32, 0, 0.15, 1),
