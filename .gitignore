@@ -39,3 +39,4 @@ vite.config.ts.timestamp-*
 /gemini.md
 /claude.md
 /agents.md
+.qwen

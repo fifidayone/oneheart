@@ -1,19 +1,32 @@
 <script lang="ts">
-  import { menuState } from "$lib/stores/menu.svelte";
-  import { i18n } from "$lib/i18n.svelte";
+  import { getMenuState } from "$lib/stores/menu.svelte";
+
+  const menuState = getMenuState();
   import { fly, draw, scale } from "svelte/transition";
   import { expoOut } from "svelte/easing";
   import { SvelteMap } from "svelte/reactivity";
-  import { onDestroy } from "svelte";
 
-  let { lenis, isResizing = false } = $props<{ lenis: any, isResizing?: boolean }>();
+  interface Props {
+    onclose: () => void;
+    isResizing?: boolean;
+  }
+
+  let { onclose, isResizing = false }: Props = $props();
   
   let firstToggle: HTMLButtonElement | undefined = $state();
-  let lastFocusedElement: HTMLElement | null = null;
 
-
-  type ViewMode = 'timeline' | 'byArtist';
-  let viewMode: ViewMode = $state('timeline');
+  const PANEL_COPY = {
+    eyebrow: "Ticketing & Shows",
+    title: "Upcoming Events",
+    tickets: "TICKETS",
+    statusAvailable: "AVAILABLE",
+    statusSoldOut: "SOLD OUT",
+    statusLimited: "LIMITED",
+    viewTimeline: "Timeline",
+    viewByArtist: "By Artist",
+    footer: "A One Heart Productions Experience",
+    closeAriaLabel: "Close events",
+  } as const;
 
   const events = [
     { date: "JUN 04", day: "THU", time: "19:15", title: "GAWDLAND Down Under", artist: "GAWDLAND", queen: "Melbourne", venue: "Chasers", status: "AVAILABLE", url: "https://events.humanitix.com/gawdland-mel/tickets" },
@@ -21,30 +34,45 @@
     { date: "JUN 07", day: "SUN", time: "21:00", title: "GAWDLAND Down Under", artist: "GAWDLAND", queen: "Adelaide", venue: "Marys Poppin", status: "AVAILABLE", url: "https://events.humanitix.com/gawdland-adl" },
   ];
 
-  const groupedByArtist = $derived.by(() => {
-    const map = new SvelteMap<string, typeof events>();
-    for (const ev of events) {
-      const key = ev.artist;
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(ev);
-    }
-    return map;
-  });
+  type ViewMode = 'timeline' | 'byArtist';
 
-  // Synchronize state and store last focused element 
+  class EventsState {
+    viewMode = $state<ViewMode>('timeline');
+    private lastFocusedElement: HTMLElement | null = null;
+    
+    groupedByArtist = $derived.by(() => {
+      const map = new SvelteMap<string, typeof events>();
+      for (const ev of events) {
+        const key = ev.artist;
+        if (!map.has(key)) map.set(key, []);
+        map.get(key)!.push(ev);
+      }
+      return map;
+    });
+
+    setView(mode: ViewMode) {
+      this.viewMode = mode;
+    }
+
+    close() {
+      onclose();
+    }
+  }
+
+  const panelState = new EventsState();
+  let lastFocusedElement: HTMLElement | null = null;
+
+  // Client-side focus management
   $effect(() => {
     if (menuState.isLeftOpen) {
-      viewMode = 'timeline';
+      panelState.viewMode = 'timeline';
       lastFocusedElement = document.activeElement as HTMLElement;
-    } else {
-      if (lastFocusedElement) {
-        lastFocusedElement.focus();
-        lastFocusedElement = null;
-      }
+    } else if (lastFocusedElement) {
+      lastFocusedElement.focus();
+      lastFocusedElement = null;
     }
   });
 
-  // Focus management when navigation is ready
   $effect(() => {
     if (menuState.isLeftOpen && menuState.isNavReady) {
       firstToggle?.focus();
@@ -67,14 +95,8 @@
         e.preventDefault();
       }
     } else if (e.key === "Escape") {
-      closePanel();
+      panelState.close();
     }
-  }
-
-
-  function closePanel() {
-    menuState.isLeftOpen = false;
-    lenis?.start();
   }
 </script>
 
@@ -92,16 +114,16 @@
       <span class="ev-show">{event.title}</span>
       <div class="ev-venue-status">
         <span class="ev-venue">@ {event.venue}</span>
-        <span class="ev-status" class:sold-out={event.status === 'SOLD OUT'} class:limited={event.status === 'LIMITED'}>
-          {event.status === 'SOLD OUT' ? i18n.t('ev_status_sold_out') :
-           event.status === 'LIMITED' ? i18n.t('ev_status_limited') :
-           i18n.t('ev_status_available')}
+        <span class={["ev-status", { 'sold-out': event.status === 'SOLD OUT', 'limited': event.status === 'LIMITED' }]}>
+          {event.status === 'SOLD OUT' ? PANEL_COPY.statusSoldOut :
+           event.status === 'LIMITED' ? PANEL_COPY.statusLimited :
+           PANEL_COPY.statusAvailable}
         </span>
       </div>
     </div>
     <div class="ev-actions">
       <a class="ev-link" href={event.url} target="_blank" rel="noreferrer">
-        <span>{i18n.t('ev_tickets')}</span>
+        <span>{PANEL_COPY.tickets}</span>
         <svg viewBox="0 0 12 12" width="10" height="10" fill="none">
           <path d="M1 11L11 1M11 1H3M11 1V9" stroke="currentColor" stroke-width="1.5" />
         </svg>
@@ -111,45 +133,43 @@
 {/snippet}
 
 <div 
-  class="events-backdrop" 
-  class:is-open={menuState.isLeftOpen} 
-  class:no-transition={isResizing}
+  class={["events-backdrop", menuState.isLeftOpen && "is-open", isResizing && "no-transition"]}
   onkeydown={handleKeydown}
   role="dialog"
   aria-modal="true"
   aria-label="Upcoming Events"
   aria-hidden={!menuState.isLeftOpen}
 >
-  <nav class="events-nav" class:is-open={menuState.isLeftOpen}>
+  <nav class={["events-nav", menuState.isLeftOpen && "is-open"]}>
     {#if menuState.isLeftOpen}
       <header class="ev-header" in:fly={{ y: 20, duration: 600, delay: 50, easing: expoOut }}>
-        <span class="ev-eyebrow">{i18n.t('ev_eyebrow')}</span>
-        <h2 class="ev-title">{i18n.t('ev_title')}</h2>
+        <span class="ev-eyebrow">{PANEL_COPY.eyebrow}</span>
+        <h2 class="ev-title">{PANEL_COPY.title}</h2>
 
         <!-- View Mode Toggle -->
         <div class="ev-view-toggle" in:fly={{ y: 10, duration: 400, delay: 150, easing: expoOut }}>
           <div class="view-toggle-track">
-            <div class="view-slider" class:by-artist={viewMode === 'byArtist'}></div>
+            <div class={["view-slider", panelState.viewMode === 'byArtist' && "by-artist"]}></div>
             <button
-              class:active={viewMode === 'timeline'}
-              onclick={() => viewMode = 'timeline'}
+              class={{ active: panelState.viewMode === 'timeline' }}
+              onclick={() => panelState.setView('timeline')}
               bind:this={firstToggle}
-            >{i18n.t('ev_view_timeline')}</button>
+            >{PANEL_COPY.viewTimeline}</button>
             <button
-              class:active={viewMode === 'byArtist'}
-              onclick={() => viewMode = 'byArtist'}
-            >{i18n.t('ev_view_by_artist')}</button>
+              class={{ active: panelState.viewMode === 'byArtist' }}
+              onclick={() => panelState.setView('byArtist')}
+            >{PANEL_COPY.viewByArtist}</button>
           </div>
         </div>
       </header>
 
       <div class="ev-scroll-area">
-        {#if viewMode === 'timeline'}
+        {#if panelState.viewMode === 'timeline'}
           {#each events as event, i (event.title + event.date)}
             {@render eventCard(event, 120 + i * 60)}
           {/each}
         {:else}
-          {#each Array.from(groupedByArtist.entries()) as [artist, artistEvents], gi (artist)}
+          {#each Array.from(panelState.groupedByArtist.entries()) as [artist, artistEvents], gi (artist)}
             <div class="ev-artist-group" in:fly={{ y: 20, duration: 600, delay: 100 + gi * 80, easing: expoOut }}>
               <div class="ev-group-header">{artist}</div>
               {#each artistEvents as event, ei (event.title + event.date)}
@@ -161,7 +181,7 @@
       </div>
 
       <footer class="ev-footer" in:fly={{ y: 10, duration: 600, delay: 400, easing: expoOut }}>
-        <p>{i18n.t('ev_footer')}</p>
+        <p>{PANEL_COPY.footer}</p>
       </footer>
     {/if}
   </nav>
@@ -169,11 +189,10 @@
 
 {#if menuState.isLeftOpen}
 <button
-  class="close-btn-left"
-  class:no-transition={isResizing}
+  class={["close-btn-left", isResizing && "no-transition"]}
   in:scale={{ duration: 300, delay: 300, easing: expoOut }}
-  onclick={closePanel}
-  aria-label={i18n.t("aria_close_events")}
+  onclick={() => panelState.close()}
+  aria-label={PANEL_COPY.closeAriaLabel}
 >
   <svg class="close-icon" viewBox="0 0 24 24" fill="none">
     <path
@@ -286,8 +305,8 @@
 
   .ev-row {
     background: linear-gradient(135deg, rgba(30, 30, 30, 0.6) 0%, rgba(10, 10, 10, 0.8) 100%);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(240, 238, 233, 0.08);
     border-radius: 4px;
     padding: clamp(0.75rem, 1.5vw, 1.25rem);
@@ -602,8 +621,8 @@
     border-radius: 4px;
     padding: 3px;
     gap: 0;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
     min-width: 14rem;
   }
 
@@ -652,7 +671,6 @@
 
   .view-toggle-track button.active {
     color: rgba(240, 238, 233, 0.9);
-    text-shadow: 0 0 10px rgba(240, 238, 233, 0.15);
   }
 
   /* --- ARTIST GROUP --- */

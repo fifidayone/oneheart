@@ -1,22 +1,78 @@
 <script lang="ts">
   import "./layout.css";
   import favicon from "$lib/assets/favicon.svg";
-  import { onMount, onDestroy } from "svelte";
   import { afterNavigate } from "$app/navigation";
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
   import { fade } from "svelte/transition";
   import type Lenis from "lenis";
   import Menu from "$lib/components/Menu.svelte";
   import EventsPanel from "$lib/components/EventsPanel.svelte";
-  import { menuState } from "$lib/stores/menu.svelte";
-  import { wrapperScroll } from "$lib/stores/scroll.svelte";
-  import { i18n } from "$lib/i18n.svelte";
+  import { setMenuState, MenuState } from "$lib/stores/menu.svelte";
+  import { setScrollState, ScrollState } from "$lib/stores/scroll.svelte";
+  import type { Attachment } from "svelte/attachments";
 
-  let { children } = $props();
+  import type { LayoutProps } from './$types';
+
+  let { children }: LayoutProps = $props();
+  
+  // Initialize Isolated Contexts (Svelte 5.40+)
+  const menuState = setMenuState(new MenuState());
+  const wrapperScroll = setScrollState(new ScrollState());
+  
   let lenis: Lenis | undefined = $state();
   let rafId: number | undefined;
 
+  let showScrollbar = $state(false);
+  let scrollTimeout: ReturnType<typeof setTimeout>;
+  let isResizing = $state(false);
+  let resizeTimeout: ReturnType<typeof setTimeout>;
+  let scrollProgress = $derived(Math.min(1, Math.max(0, wrapperScroll.y / wrapperScroll.limit)));
 
+  /**
+   * Svelte 5 Attachment for Lenis Smooth Scroll
+   */
+  const smoothScroll: Attachment<HTMLElement> = (node) => {
+    let lenisInstance: Lenis;
+
+    const init = async () => {
+      const LenisLib = (await import("lenis")).default;
+      lenisInstance = new LenisLib({
+        wrapper: node,
+        content: node,
+        duration: 1.2,
+        easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+        smoothWheel: true,
+      });
+      lenis = lenisInstance;
+
+      function raf(time: number) {
+        lenisInstance?.raf(time);
+        rafId = requestAnimationFrame(raf);
+      }
+
+      lenisInstance.on("scroll", ({ scroll, limit }: { scroll: number; limit: number }) => {
+        wrapperScroll.update(scroll, limit);
+
+        showScrollbar = true;
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+          showScrollbar = false;
+        }, 3000);
+      });
+
+      rafId = requestAnimationFrame(raf);
+    };
+
+    init();
+
+    return () => {
+      lenisInstance?.destroy();
+      clearTimeout(scrollTimeout);
+      clearTimeout(resizeTimeout);
+      if (rafId) cancelAnimationFrame(rafId);
+      lenis = undefined;
+    };
+  };
 
   function openMenu() {
     menuState.isNavReady = false;
@@ -32,32 +88,8 @@
     lenis?.stop();
   }
 
-  let scrollProgress = $derived(Math.min(1, Math.max(0, wrapperScroll.y / wrapperScroll.limit)));
-
-
-  let showScrollbar = $state(false);
-  let scrollTimeout: ReturnType<typeof setTimeout>;
-
-  let isResizing = $state(false);
-  let resizeTimeout: ReturnType<typeof setTimeout>;
-
   // CSS transition duration for layout panels (must match --anim-layout-duration in layout.css)
   const LAYOUT_TRANSITION_MS = 600;
-
-  // Bulletproof Deterministic Navigation Readiness
-  // Uses $effect cleanup (Svelte 5 best practice) to auto-clear timers on re-run or destroy.
-  $effect(() => {
-    if (menuState.isOpen || menuState.isLeftOpen) {
-      const timeout = setTimeout(() => {
-        menuState.isNavReady = true;
-      }, LAYOUT_TRANSITION_MS + 20);
-
-      // Svelte 5: cleanup runs on re-trigger or component destroy
-      return () => clearTimeout(timeout);
-    } else {
-      menuState.isNavReady = false;
-    }
-  });
 
   function handleResize() {
     if (!menuState.isOpen && !menuState.isLeftOpen) return;
@@ -68,75 +100,57 @@
     }, 150);
   }
 
-  onMount(async () => {
-    window.addEventListener("resize", handleResize);
+  // Bulletproof Deterministic Navigation Readiness
+  // Uses $effect cleanup (Svelte 5 best practice) to auto-clear timers on re-run or destroy.
+  $effect(() => {
+    if (menuState.isOpen || menuState.isLeftOpen) {
+      const timeout = setTimeout(() => {
+        menuState.setNavReady(true);
+      }, LAYOUT_TRANSITION_MS + 20);
 
-    const LenisLib = (await import("lenis")).default;
-    lenis = new LenisLib({
-      wrapper: document.querySelector(".page-wrapper") as HTMLElement,
-      content: document.querySelector(".page-wrapper") as HTMLElement,
-      duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      smoothWheel: true,
-    });
-
-    function raf(time: number) {
-      lenis?.raf(time);
-      rafId = requestAnimationFrame(raf);
+      // Svelte 5: cleanup runs on re-trigger or component destroy
+      return () => clearTimeout(timeout);
+    } else {
+      menuState.setNavReady(false);
     }
-
-    lenis.on("scroll", (e: any) => {
-      wrapperScroll.y = e.scroll;
-      wrapperScroll.limit = e.limit;
-
-      showScrollbar = true;
-      clearTimeout(scrollTimeout);
-      scrollTimeout = setTimeout(() => {
-        showScrollbar = false;
-      }, 3000);
-    });
-
-    rafId = requestAnimationFrame(raf);
   });
 
   afterNavigate(() => {
     lenis?.scrollTo(0, { immediate: true });
     wrapperScroll.y = 0;
-    menuState.isOpen = false;
-    menuState.isLeftOpen = false;
+    menuState.close();
+    menuState.closeLeft();
     lenis?.start();
   });
-
-  onDestroy(() => {
-    lenis?.destroy();
-    clearTimeout(scrollTimeout);
-    clearTimeout(resizeTimeout);
-    if (rafId) {
-      cancelAnimationFrame(rafId);
-    }
-    if (typeof window !== "undefined") {
-      window.removeEventListener("resize", handleResize);
-    }
-  });
 </script>
+
+<svelte:window onresize={handleResize} />
 
 <svelte:head>
   <link rel="icon" href={favicon} />
 </svelte:head>
 
-<Menu {lenis} {isResizing} />
+<Menu 
+  onclose={() => { menuState.close(); lenis?.start(); }} 
+  {isResizing} 
+/>
 
-<EventsPanel {lenis} {isResizing} />
+<EventsPanel 
+  onclose={() => { menuState.closeLeft(); lenis?.start(); }} 
+  {isResizing} 
+/>
 
 <!-- Scroll Progress Bar -->
-<div class="scroll-progress-container" class:visible={showScrollbar}>
+<div class={["scroll-progress-container", showScrollbar && "visible"]}>
   <div class="scroll-progress-bar" style:transform="scaleX({scrollProgress})"></div>
 </div>
 
 <div
-  class="layout-shell"
-  class:is-open={menuState.isOpen}
-  class:is-left-open={menuState.isLeftOpen}
+  class={[
+    "layout-shell",
+    menuState.isOpen && "is-open",
+    menuState.isLeftOpen && "is-left-open"
+  ]}
 >
   <div class="sticky-header-wrapper">
     <header class="site-header">
@@ -145,13 +159,13 @@
         <button
           class="nav-btn left-trigger mobile-only"
           onclick={openLeftMenu}
-          aria-label={i18n.t("aria_open_events")}
+          aria-label="Open events"
         >
           <div class="nav-lines events-icon">
             <span class="line top-line"></span>
             <span class="line bot-line"></span>
           </div>
-          <span class="nav-text-persistent">{i18n.t("nav_events")}</span>
+          <span class="nav-text-persistent">EVENTS</span>
         </button>
       </div>
 
@@ -163,9 +177,9 @@
         <button
           class="nav-btn right-trigger mobile-only"
           onclick={openMenu}
-          aria-label={i18n.t("aria_open_menu")}
+          aria-label="Open menu"
         >
-          <span class="nav-text-persistent">{i18n.t("nav_menu")}</span>
+          <span class="nav-text-persistent">MENU</span>
           <div class="nav-lines">
             <span class="line top-line"></span>
             <span class="line bot-line"></span>
@@ -178,23 +192,26 @@
   <!-- Vertical Nav Labels (Desktop only) -->
   <div class="vertical-label-container left desktop-only">
     <button class="v-label" onclick={openLeftMenu} aria-label="Open events panel">
-      <span>{i18n.t("nav_events")}</span>
+      <span>EVENTS</span>
     </button>
   </div>
 
   <div class="vertical-label-container right desktop-only">
     <button class="v-label" onclick={openMenu} aria-label="Open navigation menu">
-      <span>{i18n.t("nav_menu")}</span>
+      <span>MENU</span>
     </button>
   </div>
 
     <div
-      class="page-wrapper"
-      class:is-open={menuState.isOpen}
-      class:is-left-open={menuState.isLeftOpen}
-      class:no-transition={isResizing}
+      class={[
+        "page-wrapper",
+        menuState.isOpen && "is-open",
+        menuState.isLeftOpen && "is-left-open",
+        isResizing && "no-transition"
+      ]}
+      {@attach smoothScroll}
     >
-      {#key $page.url.pathname}
+      {#key page.url.pathname}
         <div
           in:fade={{ duration: 400, delay: 400 }}
           out:fade={{ duration: 400 }}

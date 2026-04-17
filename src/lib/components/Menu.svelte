@@ -1,22 +1,34 @@
 <script lang="ts">
-  import { menuState } from "$lib/stores/menu.svelte";
-  import { i18n } from "$lib/i18n.svelte";
+  import { getMenuState } from "$lib/stores/menu.svelte";
+
+  const menuState = getMenuState();
   import { browser } from "$app/environment";
   import { draw, scale } from "svelte/transition";
   import { expoOut } from "svelte/easing";
 
-  let { lenis, isResizing = false } = $props<{
-    lenis: any;
+  interface Props {
+    onclose: () => void;
     isResizing?: boolean;
-  }>();
+  }
+
+  let { onclose, isResizing = false }: Props = $props();
 
   let firstLink: HTMLAnchorElement | undefined = $state();
   let lastFocusedElement: HTMLElement | null = null;
 
+  const MENU_LABELS = {
+    home: "Home",
+    about: "About",
+    works: "Works",
+    upcoming: "Upcoming",
+    partnership: "Partnership",
+    contact: "Contact",
+    closeAriaLabel: "Close menu",
+  } as const;
+
 
   function closeMenu() {
-    menuState.isOpen = false;
-    lenis?.start();
+    onclose();
   }
 
   // Scroll Lock Management
@@ -53,7 +65,7 @@
     if (!menuState.isOpen) return;
     
     if (e.key === "Tab") {
-      const focusables = Array.from(document.querySelectorAll('.menu-backdrop.is-open a, .close-btn, .lang-switch-track button')) as HTMLElement[];
+      const focusables = Array.from(document.querySelectorAll('.menu-backdrop.is-open a, .close-btn')) as HTMLElement[];
       const first = focusables[0];
       const last = focusables[focusables.length - 1];
 
@@ -82,9 +94,11 @@
 </script>
 
 <div
-  class="menu-backdrop"
-  class:is-open={menuState.isOpen}
-  class:no-transition={isResizing}
+  class={[
+    "menu-backdrop",
+    menuState.isOpen && "is-open",
+    isResizing && "no-transition"
+  ]}
   ontouchmove={blockTouch}
   onkeydown={handleKeydown}
   role="dialog"
@@ -92,62 +106,34 @@
   aria-label="Main Navigation"
   aria-hidden={!menuState.isOpen}
 >
-  <div class="menu-container" class:is-open={menuState.isOpen}>
+  <div class={["menu-container", menuState.isOpen && "is-open"]}>
     <nav class="menu-links">
-      <a href="/" onclick={closeMenu} bind:this={firstLink}><span>{i18n.t("menu_home")}</span></a>
+      <a href="/" onclick={closeMenu} bind:this={firstLink}><span>{MENU_LABELS.home}</span></a>
       <a href="/about" onclick={closeMenu}
-        ><span>{i18n.t("menu_about")}</span></a
+        ><span>{MENU_LABELS.about}</span></a
       >
       <a href="/projects" onclick={closeMenu}
-        ><span>{i18n.t("menu_works")}</span></a
+        ><span>{MENU_LABELS.works}</span></a
       >
       <a href="/upcoming" onclick={closeMenu}
-        ><span>{i18n.t("menu_upcoming")}</span></a
+        ><span>{MENU_LABELS.upcoming}</span></a
       >
       <a href="/partnership" onclick={closeMenu}
-        ><span>{i18n.t("menu_partnership")}</span></a
+        ><span>{MENU_LABELS.partnership}</span></a
       >
       <a href="/contact" onclick={closeMenu}
-        ><span>{i18n.t("menu_contact")}</span></a
+        ><span>{MENU_LABELS.contact}</span></a
       >
     </nav>
-
-    <!-- Language Switcher: Responsive Layout -->
-    <div class="menu-lang-switcher">
-      <div class="lang-switch-track">
-        <div
-          class="slider"
-          class:en={i18n.currentLocale === "en"}
-          class:th={i18n.currentLocale === "th"}
-          class:tw={i18n.currentLocale === "tw"}
-        ></div>
-        <button
-          class:active={i18n.currentLocale === "en"}
-          onclick={() => i18n.setLocale("en")}
-          aria-label="Switch to English">EN</button
-        >
-        <button
-          class:active={i18n.currentLocale === "th"}
-          onclick={() => i18n.setLocale("th")}
-          aria-label="Switch to Thai">TH</button
-        >
-        <button
-          class:active={i18n.currentLocale === "tw"}
-          onclick={() => i18n.setLocale("tw")}
-          aria-label="Switch to Traditional Chinese">TW</button
-        >
-      </div>
-    </div>
   </div>
 </div>
 
 {#if menuState.isOpen}
   <button
-    class="close-btn"
-    class:no-transition={isResizing}
+    class={["close-btn", isResizing && "no-transition"]}
     in:scale={{ duration: 300, delay: 300, easing: expoOut }}
     onclick={closeMenu}
-    aria-label={i18n.t("aria_close_menu")}
+    aria-label={MENU_LABELS.closeAriaLabel}
   >
     <svg class="close-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
@@ -216,8 +202,6 @@
     justify-content: center;
     position: relative;
     width: 100%;
-    /* Leave space on the right for the vertical language switcher */
-    padding-right: clamp(5rem, 12vw, 10rem);
     box-sizing: border-box;
     touch-action: none;
   }
@@ -236,12 +220,10 @@
     margin: -0.75rem -1.5rem;
     opacity: 0;
     transform: translateY(20px);
-    filter: blur(4px);
     pointer-events: none;
     transition:
       opacity 0.4s ease,
-      transform 0.6s cubic-bezier(0.16, 1, 0.3, 1),
-      filter 0.4s ease;
+      transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
     border-radius: 4px;
   }
 
@@ -252,13 +234,11 @@
     box-shadow: 0 0 20px rgba(var(--color-white-rgb), 0.4);
     opacity: 1;
     transform: translateY(0);
-    filter: blur(0);
   }
 
   .menu-container.is-open a {
     opacity: 1;
     transform: translateY(0);
-    filter: blur(0);
     pointer-events: auto;
   }
 
@@ -297,131 +277,19 @@
       letter-spacing 0.3s cubic-bezier(0.16, 1, 0.3, 1),
       font-size 0.4s cubic-bezier(0.22, 1, 0.36, 1),
       color 0.25s ease,
-      text-shadow 0.25s ease,
-      opacity 0.3s ease,
-      filter 0.3s ease;
+      opacity 0.3s ease;
     white-space: nowrap;
     will-change: transform, letter-spacing, color, font-size;
   }
 
   .menu-links:hover a:not(:hover) span {
     opacity: 0.3;
-    filter: blur(2px);
   }
 
   .menu-links a:hover span {
     color: var(--color-white);
-    text-shadow: 0 0 15px rgba(var(--color-white-rgb), 0.3);
     transform: translateX(12px) skewX(-6deg);
     letter-spacing: 0.16em;
-  }
-
-  /* --- LANGUAGE SWITCHER --- */
-  .menu-lang-switcher {
-    position: absolute;
-    right: clamp(1rem, 4vw, 3rem);
-    top: 50%;
-    opacity: 0;
-    transform: translateY(-50%) translateX(20px);
-    transition:
-      opacity 0.3s ease,
-      transform 0.4s ease;
-    z-index: 10;
-    pointer-events: none;
-  }
-
-  .menu-container.is-open .menu-lang-switcher {
-    opacity: 1;
-    transform: translateY(-50%) translateX(0);
-    transition:
-      opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.4s,
-      transform 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.4s;
-    pointer-events: auto;
-  }
-
-  .lang-switch-track {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    background: rgba(10, 10, 10, 0.4);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid var(--color-pearl-mist);
-    box-shadow:
-      inset 0 1px 1px rgba(var(--color-text-rgb), 0.05),
-      0 10px 30px rgba(0, 0, 0, 0.5);
-    border-radius: 4px;
-    padding: 6px;
-    gap: 4px;
-    width: 48px;
-  }
-
-  .lang-switch-track .slider {
-    position: absolute;
-    left: 4px;
-    right: 4px;
-    top: 4px;
-    height: calc((100% - 8px) / 3);
-    background: rgba(var(--color-text-rgb), 0.05);
-    border: 1px solid rgba(var(--color-text-rgb), 0.2);
-    border-radius: 2px;
-    box-shadow:
-      inset 0 1px 2px rgba(var(--color-text-rgb), 0.1),
-      0 0 12px rgba(var(--color-text-rgb), 0.15);
-    transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
-    pointer-events: none;
-    z-index: 1;
-  }
-
-  .slider.en {
-    transform: translateY(0);
-  }
-  .slider.th {
-    transform: translateY(100%);
-  }
-  .slider.tw {
-    transform: translateY(200%);
-  }
-
-  .lang-switch-track button {
-    background: none;
-    border: none;
-    padding: 0.875rem 0;
-    font-family: var(--font-primary);
-    font-size: 0.7rem;
-    font-weight: 500;
-    letter-spacing: 0.15em;
-    color: rgba(var(--color-text-rgb), 0.4);
-    cursor: pointer;
-    transition:
-      color 0.4s ease,
-      text-shadow 0.4s ease,
-      outline-offset 0.2s ease;
-    text-transform: uppercase;
-    position: relative;
-    z-index: 2;
-    text-align: center;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 2px;
-  }
-
-  /* Focus-visible styles for language switcher buttons - on-brand white glow */
-  .lang-switch-track button:focus-visible {
-    outline: 2px solid var(--color-white);
-    outline-offset: 2px;
-    box-shadow: 0 0 15px rgba(var(--color-white-rgb), 0.4);
-  }
-
-  .lang-switch-track button:hover {
-    color: rgba(var(--color-text-rgb), 0.8);
-  }
-
-  .lang-switch-track button.active {
-    color: var(--color-text);
-    font-weight: 600;
-    text-shadow: 0 0 10px rgba(var(--color-white-rgb), 0.3);
   }
 
   .close-btn {
@@ -509,65 +377,8 @@
     }
 
     .menu-container {
-      padding-right: 0;
       /* Center the menu links block within the full panel area */
       align-items: center;
-    }
-
-    .menu-lang-switcher {
-      position: absolute;
-      top: auto;
-      /* clamp(MIN, VAL, MAX) */
-      bottom: clamp(5rem, 4vh, 4rem);
-      right: auto;
-      /* Center within the menu panel area */
-      left: 50%;
-      margin-top: 0;
-      transform: translateX(-50%) translateY(20px);
-      transform-origin: center center;
-      transition:
-        opacity 0.3s ease,
-        transform 0.4s ease;
-    }
-
-    .menu-container.is-open .menu-lang-switcher {
-      transform: translateX(-50%) translateY(0);
-      transition:
-        opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.4s,
-        transform 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.4s;
-    }
-
-    .lang-switch-track {
-      flex-direction: row;
-      width: 180px; /* Made smaller */
-      height: 40px; /* Made smaller */
-      padding: 4px;
-    }
-
-    .lang-switch-track .slider {
-      top: 4px;
-      bottom: 4px;
-      left: 4px;
-      right: auto;
-      height: auto;
-      width: calc((100% - 8px) / 3);
-    }
-
-    .slider.en {
-      transform: translateX(0);
-    }
-    .slider.th {
-      transform: translateX(100%);
-    }
-    .slider.tw {
-      transform: translateX(200%);
-    }
-
-    .lang-switch-track button {
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      font-size: 0.65rem; /* Smaller font */
     }
   }
 </style>

@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { i18n } from "$lib/i18n.svelte";
-
   const BRANDS = [
     {
       label: "DISCORD",
@@ -37,7 +35,7 @@
   <div class="clients-grid">
     <div class="clients-header-col">
       <div class="glow-dot"></div>
-      <span class="clients-label">{i18n.t("home_marquee")}</span>
+      <span class="clients-label">GLOBAL PARTNERS</span>
     </div>
 
     <div class="marquee-col">

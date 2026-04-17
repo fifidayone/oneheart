@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { i18n } from "$lib/i18n.svelte";
-  import { wrapperScroll } from "$lib/stores/scroll.svelte";
+  import type { Attachment } from "svelte/attachments";
+  import { getScrollState } from "$lib/stores/scroll.svelte";
+
+  const wrapperScroll = getScrollState();
 
   const PHOTOS = [
     { src: "/typo/1.avif", width: 1856, height: 2298 },
@@ -11,30 +12,57 @@
     { src: "/typo/5.avif", width: 1856, height: 2298 },
   ] as const;
 
-  let storyEl: HTMLDivElement | undefined = $state();
-  let storyPinEl: HTMLDivElement | undefined = $state();
+  const STORY_WORDS = [
+    "BRINGING",
+    "THE",
+    "BEST",
+    "OF",
+    "GLOBAL",
+    "DRAG",
+    "EXPERIENCES",
+    "TO",
+    "ASIA",
+  ];
+  const HIGHLIGHT = "POWER AS ONE";
+
   let metrics = $state({ top: 0, range: 0 });
   let revealed = $state(false);
 
-  function captureStory(node: HTMLDivElement) {
-    storyEl = node;
+  const measure: Attachment<HTMLElement> = (node) => {
+    const update = () => {
+      metrics.top = node.offsetTop;
+      metrics.range = Math.max(0, node.offsetHeight - window.innerHeight);
+    };
+
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    window.addEventListener("resize", update);
+    update();
 
     return () => {
-      if (storyEl === node) {
-        storyEl = undefined;
-      }
+      observer.disconnect();
+      window.removeEventListener("resize", update);
     };
-  }
+  };
 
-  function captureStoryPin(node: HTMLDivElement) {
-    storyPinEl = node;
+  const inView: Attachment<HTMLElement> = (node) => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          revealed = true;
+          observer.disconnect();
+        }
+      },
+      {
+        threshold: 0.15,
+        root: null,
+        rootMargin: "0px 0px -40px 0px",
+      },
+    );
 
-    return () => {
-      if (storyPinEl === node) {
-        storyPinEl = undefined;
-      }
-    };
-  }
+    observer.observe(node);
+    return () => observer.disconnect();
+  };
 
   let scrollProgress = $derived.by(() => {
     if (!metrics || metrics.range <= 0) return 0;
@@ -43,102 +71,48 @@
 
   // Phase 1 (Holding): 0.0 -> 0.30
   // Phase 2 (Transition - Scale Reveal): 0.30 -> 0.46
-  let transitionProgress = $derived(
-    Math.min(1, Math.max(0, (scrollProgress - 0.30) / 0.16))
-  );
+  let transitionProgress = $derived(Math.min(1, Math.max(0, (scrollProgress - 0.30) / 0.16)));
 
   // Phase 3 (Photos sequence): 0.46 -> 1.0
-  let photoProgress = $derived(
-    Math.min(1, Math.max(0, (scrollProgress - 0.46) / 0.54))
-  );
+  let photoProgress = $derived(Math.min(1, Math.max(0, (scrollProgress - 0.46) / 0.54)));
 
   let activePhoto = $derived(
-    Math.min(PHOTOS.length - 1, Math.floor(photoProgress * PHOTOS.length))
+    Math.min(PHOTOS.length - 1, Math.floor(photoProgress * PHOTOS.length)),
   );
-
-  onMount(() => {
-    function updateMetrics() {
-      if (!storyPinEl) {
-        return;
-      }
-
-      metrics.top = storyPinEl.offsetTop;
-      metrics.range = Math.max(0, storyPinEl.offsetHeight - window.innerHeight);
-    }
-
-    const resizeObserver = new ResizeObserver(() => {
-      updateMetrics();
-    });
-
-    if (storyPinEl) {
-      resizeObserver.observe(storyPinEl);
-    }
-
-    window.addEventListener("resize", updateMetrics);
-    updateMetrics();
-
-    let observer: IntersectionObserver | undefined;
-
-    if (storyEl) {
-      observer = new IntersectionObserver(
-        ([entry]) => {
-          if (entry.isIntersecting) {
-            revealed = true;
-            observer?.disconnect();
-          }
-        },
-        {
-          threshold: 0.15,
-          root: null,
-          rootMargin: "0px 0px -40px 0px",
-        },
-      );
-
-      observer.observe(storyEl);
-    }
-
-    return () => {
-      resizeObserver.disconnect();
-      observer?.disconnect();
-      window.removeEventListener("resize", updateMetrics);
-    };
-  });
 </script>
 
-<div class="story-pin-outer" {@attach captureStoryPin}>
+{#snippet corner(pos: "tl" | "tr" | "bl" | "br")}
+  <div class={["canvas-corner", pos]}></div>
+{/snippet}
+
+<div class="story-pin-outer" {@attach measure}>
   <section class="story-section" style="--t-prog: {transitionProgress};">
-    <div class="ambient-glow"></div>
     <div class="dot-pattern-bg"></div>
 
     <div class="story-container">
       <div class="typo-wrapper">
-        <div
-          class="typo-narrative"
-          class:revealed
-          {@attach captureStory}
-          data-lang={i18n.currentLocale}
-        >
-        {#each i18n.tArray("story_words") as word, i (`${i}-${word}`)}
-          <span class="word" style="transition-delay: {0.05 + i * 0.04}s">
-            {word}
+        <div class={["typo-narrative", revealed && "revealed"]} {@attach inView}>
+          {#each STORY_WORDS as word, i (`${i}-${word}`)}
+            <span class="word" style="transition-delay: {0.05 + i * 0.04}s">
+              {word}
+            </span>
+          {/each}
+          <span
+            class="word highlight aurora-text"
+            style="transition-delay: {0.05 + STORY_WORDS.length * 0.04}s"
+            data-text={HIGHLIGHT}
+          >
+            {HIGHLIGHT}
           </span>
-        {/each}
-        <span
-          class="word highlight aurora-text"
-          style="transition-delay: {0.05 + i18n.tArray('story_words').length * 0.04}s"
-          data-text={i18n.t("story_highlight")}
-        >
-          {i18n.t("story_highlight")}
-        </span>
+        </div>
       </div>
-    </div>
 
-    <div class="photo-canvas">
+      <div class="photo-canvas">
         <div class="canvas-grain"></div>
-        <div class="canvas-corner tl"></div>
-        <div class="canvas-corner tr"></div>
-        <div class="canvas-corner bl"></div>
-        <div class="canvas-corner br"></div>
+        {@render corner("tl")}
+        {@render corner("tr")}
+        {@render corner("bl")}
+        {@render corner("br")}
         <div class="canvas-label">
           <span class="canvas-index">{String(activePhoto + 1).padStart(2, "0")}</span>
           <span class="canvas-sep">—</span>
@@ -147,10 +121,12 @@
         <div class="canvas-images">
           {#each PHOTOS as photo, i (photo.src)}
             <img
-              class="canvas-img"
-              class:active={i === activePhoto}
-              class:prev={i < activePhoto}
-              class:next={i > activePhoto}
+              class={[
+                "canvas-img",
+                i === activePhoto && "active",
+                i < activePhoto && "prev",
+                i > activePhoto && "next",
+              ]}
               src={photo.src}
               alt="One Heart Productions – visual {i + 1}"
               loading={i === 0 ? "eager" : "lazy"}
@@ -165,16 +141,7 @@
 </div>
 
 <style>
-  @keyframes ambient-pulse {
-    0% {
-      transform: translate(-50%, -50%) scale(0.9) rotate(0deg);
-      opacity: 0.6;
-    }
-    100% {
-      transform: translate(-50%, -50%) scale(1.1) rotate(5deg);
-      opacity: 1;
-    }
-  }
+
 
   @keyframes aurora-flow {
     0% {
@@ -185,6 +152,19 @@
     }
     100% {
       background-position: 0% 50%;
+    }
+  }
+
+  @keyframes filmGrain {
+    0%,
+    100% {
+      transform: translate(0, 0);
+    }
+    33% {
+      transform: translate(-2%, -1%);
+    }
+    66% {
+      transform: translate(1%, 2%);
     }
   }
 
@@ -206,36 +186,23 @@
     overflow: hidden;
   }
 
-  .ambient-glow {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 70vw;
-    height: 70vh;
-    z-index: 0;
-    pointer-events: none;
-    background: radial-gradient(
-      circle,
-      rgba(166, 140, 105, 0.08) 0%,
-      rgba(56, 189, 248, 0.03) 40%,
-      transparent 65%
-    );
-    filter: blur(80px);
-    animation: ambient-pulse 8s ease-in-out infinite alternate;
-  }
+
 
   .dot-pattern-bg {
     position: absolute;
     inset: 0;
     z-index: 1;
     pointer-events: none;
-    background-image:
-      radial-gradient(ellipse at center, transparent 20%, var(--color-bg-dark) 80%),
-      radial-gradient(rgba(var(--color-text-rgb), 0.1) 1px, transparent 1px);
+    background-image: radial-gradient(
+        ellipse at center,
+        transparent 30%,
+        var(--color-bg-dark) 90%
+      ),
+      /* Increased opacity from 0.1 to 0.18 for better visibility */
+      radial-gradient(rgba(var(--color-text-rgb), 0.18) 1px, transparent 1px);
     background-size:
       100% 100%,
-      28px 28px;
+      24px 24px; /* Slightly tighter grid for more premium feel */
     background-position: center;
   }
 
@@ -270,57 +237,33 @@
     max-width: 100%;
   }
 
-  .typo-narrative[data-lang="th"] {
-    line-height: 1.25;
-    gap: 0.15em 0.3em;
-    padding-top: 0.15em;
-    padding-bottom: 0.15em;
-  }
-
-  .typo-narrative[data-lang="th"] .word {
-    line-height: 1.25;
-    padding-bottom: 0.05em;
-  }
-
-  .typo-narrative[data-lang="tw"] {
-    line-height: 1.15;
-    gap: 0.08em 0.25em;
-    padding-top: 0.05em;
-    padding-bottom: 0.05em;
-  }
-
-  .typo-narrative[data-lang="tw"] .word {
-    line-height: 1.15;
-  }
-
   .typo-narrative .word {
     color: rgba(var(--color-text-rgb), 0.06);
     transform: translateY(40px) scale(0.9);
     opacity: 0;
-    filter: blur(12px);
+    transform: translateY(30px);
+    opacity: 0;
     transition:
       color 1.2s cubic-bezier(0.16, 1, 0.3, 1),
       transform 1.4s cubic-bezier(0.16, 1, 0.3, 1),
-      opacity 1.2s cubic-bezier(0.16, 1, 0.3, 1),
-      filter 1.2s cubic-bezier(0.16, 1, 0.3, 1);
-    will-change: transform, opacity, color, filter;
+      opacity 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: transform, opacity, color;
     cursor: default;
   }
 
   .typo-narrative.revealed .word {
     transform: translateY(0) scale(1);
     opacity: 1;
-    filter: blur(0);
-    color: rgba(var(--color-text-rgb), 0.4);
+    /* Changed to solid opaque gray to prevent background dots from showing through */
+    color: #555555;
   }
 
   .typo-narrative.revealed .word:hover {
     color: var(--color-white);
-    transform: scale(1.05) translateY(-5px);
+    transform: scale(1.05);
     transition-delay: 0s !important;
     transition-duration: 0.3s;
     transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
-    text-shadow: 0 0 25px rgba(var(--color-white-rgb), 0.5);
     z-index: 10;
   }
 
@@ -345,40 +288,15 @@
     -webkit-text-stroke: 1px rgba(255, 255, 255, 0.06);
   }
 
-  .typo-narrative .word.highlight.aurora-text::after {
-    content: attr(data-text);
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    background: inherit;
-    background-size: inherit;
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    filter: blur(18px);
-    opacity: 0;
-    transition: opacity 1.2s cubic-bezier(0.16, 1, 0.3, 1);
-  }
+
 
   .typo-narrative.revealed .word.highlight.aurora-text {
-    animation: aurora-flow 8s linear infinite;
-  }
-
-  .typo-narrative.revealed .word.highlight.aurora-text::after {
-    opacity: 0.35;
     animation: aurora-flow 8s linear infinite;
   }
 
   .typo-narrative.revealed .word.highlight.aurora-text:hover {
     animation: aurora-flow 3s linear infinite;
     transform: scale(1.02) translateY(-2px);
-    text-shadow: 0 0 18px rgba(255, 42, 112, 0.22);
-  }
-
-  .typo-narrative.revealed .word.highlight.aurora-text:hover::after {
-    opacity: 0.55;
-    filter: blur(24px);
-    animation: aurora-flow 3s linear infinite;
   }
 
   .photo-canvas {
@@ -528,8 +446,7 @@
     position: absolute;
     inset: 0;
     z-index: 2;
-    background:
-      linear-gradient(
+    background: linear-gradient(
         to bottom,
         rgba(var(--color-bg-rgb), 0.3) 0%,
         transparent 30%,
