@@ -3,7 +3,7 @@
   import favicon from "$lib/assets/favicon.svg";
   import { onMount, onDestroy } from "svelte";
   import { afterNavigate } from "$app/navigation";
-  import Lenis from "lenis";
+  import type Lenis from "lenis";
   import Menu from "$lib/components/Menu.svelte";
   import { menuOpen } from "$lib/stores/menu";
 
@@ -26,8 +26,9 @@
     }, 400); // หยุด transition ชั่วคราวระหว่างโดนจับย่อขยาย
   }
 
-  onMount(() => {
-    lenis = new Lenis({
+  onMount(async () => {
+    const LenisLib = (await import("lenis")).default;
+    lenis = new LenisLib({
       wrapper: document.querySelector(".page-wrapper") as HTMLElement,
       content: document.querySelector(".page-wrapper") as HTMLElement,
       duration: 1.2,
@@ -70,7 +71,7 @@
 >
   <!-- Header ล็อกอยู่กับ page-wrapper จะ scale ตามไปพร้อมกันเหมือนต้นฉบับ -->
   <header class="site-header">
-    <a href="/contact" class="contact-btn">Contact</a>
+    <a href="/contact" class="contact-btn">Connect With One Heart</a>
     <button class="menu-btn" onclick={openMenu} aria-label="Open menu">
       <span></span>
       <span></span>
@@ -130,20 +131,28 @@
     z-index: 10;
     display: flex;
     align-items: center;
-    gap: 1rem;
-    padding: 1.25rem 1.5rem;
+    gap: 2rem;
+    padding: 2.5rem 3.5rem;
   }
 
   .contact-btn {
-    font-size: 0.75rem;
-    letter-spacing: 0.02em;
-    padding: 0.5rem 1.1rem;
+    font-size: 1.05rem; /* ล็อคขนาดตัวอักษรไว้ ไม่กระทบ padding */
+    font-weight: 400;
+    letter-spacing: 0; /* ปิด letter-spacing เพื่อให้ Mixed Case อ่านได้ธรรมชาติ */
+    padding: 0.35rem 1.25rem; /* ลดซ้ายขวา ~10%, บนล่าง ~5% */
     border-radius: 999px;
     border: 1.5px solid rgba(240, 238, 233, 0.4);
     background: transparent;
-    color: rgba(240, 238, 233, 0.9);
+    color: rgba(240, 238, 233, 0.95);
     cursor: pointer;
     text-decoration: none;
+    transition: all 0.3s ease;
+  }
+
+  .contact-btn:hover {
+    background: #f0eee9;
+    color: #282c30;
+    border-color: #f0eee9;
   }
 
   .menu-btn {
