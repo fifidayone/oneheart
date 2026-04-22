@@ -4,12 +4,12 @@ import { getMediaBucket, resolveHeroPosterKey, resolveHeroVideoKey } from './her
 function createBucket(existingKeys: Set<string>) {
 	return {
 		head: vi.fn(async (key: string) => (existingKeys.has(key) ? { key } : null))
-	} as unknown as R2Bucket;
+	};
 }
 
 describe('hero-media', () => {
 	it('returns media bucket from platform', () => {
-		const bucket = {} as R2Bucket;
+		const bucket = {};
 		expect(getMediaBucket({ env: { MEDIA_BUCKET: bucket } } as App.Platform)).toBe(bucket);
 		expect(getMediaBucket(undefined)).toBeUndefined();
 	});

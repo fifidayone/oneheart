@@ -1,15 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const getMediaBucket = vi.fn();
-const resolveHeroVideoKey = vi.fn();
+const mocks = vi.hoisted(() => ({
+	getMediaBucket: vi.fn(),
+	resolveHeroVideoKey: vi.fn()
+}));
 
 vi.mock('$app/environment', () => ({ dev: false }));
 vi.mock('$lib/server/hero-media', () => ({
-	getMediaBucket,
-	resolveHeroVideoKey
+	getMediaBucket: mocks.getMediaBucket,
+	resolveHeroVideoKey: mocks.resolveHeroVideoKey
 }));
 
-import { GET } from './+server';
+import { GET } from '../routes/media/hero-video.mp4/+server';
 
 describe('GET /media/hero-video.mp4', () => {
 	beforeEach(() => {
@@ -17,7 +19,7 @@ describe('GET /media/hero-video.mp4', () => {
 	});
 
 	it('returns 503 when media bucket is not configured', async () => {
-		getMediaBucket.mockReturnValue(undefined);
+		mocks.getMediaBucket.mockReturnValue(undefined);
 
 		const response = await GET({ platform: undefined, request: new Request('http://localhost') } as never);
 
@@ -26,8 +28,8 @@ describe('GET /media/hero-video.mp4', () => {
 	});
 
 	it('returns 404 when hero video key cannot be resolved', async () => {
-		getMediaBucket.mockReturnValue({});
-		resolveHeroVideoKey.mockResolvedValue(null);
+		mocks.getMediaBucket.mockReturnValue({});
+		mocks.resolveHeroVideoKey.mockResolvedValue(null);
 
 		const response = await GET({ platform: {} as App.Platform, request: new Request('http://localhost') } as never);
 
@@ -44,8 +46,8 @@ describe('GET /media/hero-video.mp4', () => {
 				httpMetadata: { contentType: 'video/mp4' }
 			})
 		};
-		getMediaBucket.mockReturnValue(bucket);
-		resolveHeroVideoKey.mockResolvedValue('hero-video.mp4');
+		mocks.getMediaBucket.mockReturnValue(bucket);
+		mocks.resolveHeroVideoKey.mockResolvedValue('hero-video.mp4');
 
 		const response = await GET({ platform: {} as App.Platform, request: new Request('http://localhost') } as never);
 
@@ -67,8 +69,8 @@ describe('GET /media/hero-video.mp4', () => {
 				range: { offset: 100, length: 200 }
 			})
 		};
-		getMediaBucket.mockReturnValue(bucket);
-		resolveHeroVideoKey.mockResolvedValue('hero-video.mp4');
+		mocks.getMediaBucket.mockReturnValue(bucket);
+		mocks.resolveHeroVideoKey.mockResolvedValue('hero-video.mp4');
 
 		const request = new Request('http://localhost', { headers: { range: 'bytes=100-299' } });
 		const response = await GET({ platform: {} as App.Platform, request } as never);
@@ -88,8 +90,8 @@ describe('GET /media/hero-video.mp4', () => {
 				httpMetadata: { contentType: 'video/mp4' }
 			})
 		};
-		getMediaBucket.mockReturnValue(bucket);
-		resolveHeroVideoKey.mockResolvedValue('hero-video.mp4');
+		mocks.getMediaBucket.mockReturnValue(bucket);
+		mocks.resolveHeroVideoKey.mockResolvedValue('hero-video.mp4');
 
 		const request = new Request('http://localhost', { headers: { range: 'bytes=100-200,300-400' } });
 		const response = await GET({ platform: {} as App.Platform, request } as never);
@@ -102,8 +104,8 @@ describe('GET /media/hero-video.mp4', () => {
 		const bucket = {
 			get: vi.fn().mockRejectedValue(new Error('boom'))
 		};
-		getMediaBucket.mockReturnValue(bucket);
-		resolveHeroVideoKey.mockResolvedValue('hero-video.mp4');
+		mocks.getMediaBucket.mockReturnValue(bucket);
+		mocks.resolveHeroVideoKey.mockResolvedValue('hero-video.mp4');
 
 		const response = await GET({ platform: {} as App.Platform, request: new Request('http://localhost') } as never);
 

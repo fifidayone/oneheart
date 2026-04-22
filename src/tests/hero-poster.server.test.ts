@@ -1,15 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const getMediaBucket = vi.fn();
-const resolveHeroPosterKey = vi.fn();
+const mocks = vi.hoisted(() => ({
+	getMediaBucket: vi.fn(),
+	resolveHeroPosterKey: vi.fn()
+}));
 
 vi.mock('$app/environment', () => ({ dev: false }));
 vi.mock('$lib/server/hero-media', () => ({
-	getMediaBucket,
-	resolveHeroPosterKey
+	getMediaBucket: mocks.getMediaBucket,
+	resolveHeroPosterKey: mocks.resolveHeroPosterKey
 }));
 
-import { GET } from './+server';
+import { GET } from '../routes/media/hero-poster.avif/+server';
 
 describe('GET /media/hero-poster.avif', () => {
 	beforeEach(() => {
@@ -17,7 +19,7 @@ describe('GET /media/hero-poster.avif', () => {
 	});
 
 	it('returns 503 when media bucket is not configured', async () => {
-		getMediaBucket.mockReturnValue(undefined);
+		mocks.getMediaBucket.mockReturnValue(undefined);
 
 		const response = await GET({ platform: undefined } as never);
 
@@ -26,8 +28,8 @@ describe('GET /media/hero-poster.avif', () => {
 	});
 
 	it('returns 404 when hero poster key cannot be resolved', async () => {
-		getMediaBucket.mockReturnValue({});
-		resolveHeroPosterKey.mockResolvedValue(null);
+		mocks.getMediaBucket.mockReturnValue({});
+		mocks.resolveHeroPosterKey.mockResolvedValue(null);
 
 		const response = await GET({ platform: {} as App.Platform } as never);
 
@@ -39,8 +41,8 @@ describe('GET /media/hero-poster.avif', () => {
 		const bucket = {
 			get: vi.fn().mockResolvedValue({ size: 120, httpEtag: 'etag' })
 		};
-		getMediaBucket.mockReturnValue(bucket);
-		resolveHeroPosterKey.mockResolvedValue('hero-poster.avif');
+		mocks.getMediaBucket.mockReturnValue(bucket);
+		mocks.resolveHeroPosterKey.mockResolvedValue('hero-poster.avif');
 
 		const response = await GET({ platform: {} as App.Platform } as never);
 
@@ -58,8 +60,8 @@ describe('GET /media/hero-poster.avif', () => {
 				httpMetadata: { contentType: 'image/avif' }
 			})
 		};
-		getMediaBucket.mockReturnValue(bucket);
-		resolveHeroPosterKey.mockResolvedValue('hero-poster.avif');
+		mocks.getMediaBucket.mockReturnValue(bucket);
+		mocks.resolveHeroPosterKey.mockResolvedValue('hero-poster.avif');
 
 		const response = await GET({ platform: {} as App.Platform } as never);
 
@@ -75,8 +77,8 @@ describe('GET /media/hero-poster.avif', () => {
 		const bucket = {
 			get: vi.fn().mockRejectedValue(new Error('poster boom'))
 		};
-		getMediaBucket.mockReturnValue(bucket);
-		resolveHeroPosterKey.mockResolvedValue('hero-poster.avif');
+		mocks.getMediaBucket.mockReturnValue(bucket);
+		mocks.resolveHeroPosterKey.mockResolvedValue('hero-poster.avif');
 
 		const response = await GET({ platform: {} as App.Platform } as never);
 
