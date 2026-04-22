@@ -1,3 +1,4 @@
+import { dev } from "$app/environment";
 import type { RequestHandler } from "./$types";
 import {
   getMediaBucket,
@@ -76,7 +77,13 @@ export const GET: RequestHandler = async ({ platform, request }) => {
     headers.set("content-type", object.httpMetadata?.contentType ?? "video/mp4");
     headers.set("accept-ranges", "bytes");
     headers.set("etag", object.httpEtag);
-    headers.set("cache-control", "public, max-age=3600"); // แคช 1 ชั่วโมงกันเหนียว
+    
+    // Performance: Edge caching with revalidation
+    headers.set("cache-control", dev ? "no-store" : "public, max-age=3600, stale-while-revalidate=86400");
+    
+    // Critical for CDNs when serving partial content
+    headers.set("vary", "Range");
+    headers.set("x-content-type-options", "nosniff");
 
     // 5. จัดการเรื่อง Partial Content (Range) ตามมาตรฐาน Cloudflare
     let status = 200;

@@ -10,26 +10,32 @@ const HERO_POSTER_KEYS = [
   "hero-poster.avif",
 ] as const;
 
-const resolvedHeroMediaKeys = new Map<string, string>();
+const resolvedKeyCache = new WeakMap<R2Bucket, Map<string, string | null>>();
 
 async function resolveFirstExistingKey(
   bucket: R2Bucket,
-  cacheKey: string,
   candidates: readonly string[],
 ) {
-  const cachedKey = resolvedHeroMediaKeys.get(cacheKey);
-  if (cachedKey) {
-    return cachedKey;
+  let bucketCache = resolvedKeyCache.get(bucket);
+  if (!bucketCache) {
+    bucketCache = new Map<string, string | null>();
+    resolvedKeyCache.set(bucket, bucketCache);
+  }
+
+  const cacheKey = candidates.join("|");
+  if (bucketCache.has(cacheKey)) {
+    return bucketCache.get(cacheKey) ?? null;
   }
 
   for (const key of candidates) {
     const object = await bucket.head(key);
     if (object) {
-      resolvedHeroMediaKeys.set(cacheKey, key);
+      bucketCache.set(cacheKey, key);
       return key;
     }
   }
 
+  bucketCache.set(cacheKey, null);
   return null;
 }
 
@@ -38,9 +44,9 @@ export function getMediaBucket(platform: App.Platform | undefined) {
 }
 
 export function resolveHeroVideoKey(bucket: R2Bucket) {
-  return resolveFirstExistingKey(bucket, "hero-video", HERO_VIDEO_KEYS);
+  return resolveFirstExistingKey(bucket, HERO_VIDEO_KEYS);
 }
 
 export function resolveHeroPosterKey(bucket: R2Bucket) {
-  return resolveFirstExistingKey(bucket, "hero-poster", HERO_POSTER_KEYS);
+  return resolveFirstExistingKey(bucket, HERO_POSTER_KEYS);
 }

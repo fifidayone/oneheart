@@ -1,11 +1,18 @@
 <script lang="ts">
   import { expoOut } from "svelte/easing";
+  import gawdland from "$lib/assets/home/featured/gawdland.jpg?w=400&h=400&fit=cover&position=left&enhanced";
 
   /**
    * Svelte 5 Custom Transition
    * Editorial 'blurFly' with subtle scale for a premium feel.
    */
   function blurFly(node: Element, { delay = 0, duration = 800, easing = expoOut, y = 40, blur = 12 } = {}) {
+    // Respect reduced-motion: skip blur/transform, use short opacity fade
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reducedMotion) {
+      return { delay: 0, duration: Math.min(duration, 300), easing, css: (t: number) => `opacity: ${t};` };
+    }
+
     const style = getComputedStyle(node);
     const transform = style.transform === 'none' ? '' : style.transform;
 
@@ -28,49 +35,54 @@
   class ToastManager {
     visible: boolean = $state(false);
     duration: number = 15000;
-    elapsed: number = $state(0);
     paused: boolean = $state(false);
-    lastTick: number = 0;
-    timerId: number | null = null;
-
-    get progress(): number {
-      return Math.max(0, 100 - (this.elapsed / this.duration) * 100);
-    }
+    private remaining = this.duration;
+    private startedAt = 0;
+    private dismissTimeout: ReturnType<typeof setTimeout> | null = null;
 
     start(): void {
       if (this.visible) return;
+
       this.visible = true;
-      this.lastTick = Date.now();
-      this.tick();
+      this.paused = false;
+      this.remaining = this.duration;
+      this.startedAt = performance.now();
+      this.scheduleDismiss(this.remaining);
     }
 
-    tick = (): void => {
-      if (!this.visible) return;
-      
-      if (!this.paused) {
-        const now = Date.now();
-        this.elapsed += now - this.lastTick;
-        this.lastTick = now;
+    private clearDismissTimeout(): void {
+      if (this.dismissTimeout === null) return;
 
-        if (this.elapsed >= this.duration) {
-          this.dismiss();
-          return;
-        }
-      } else {
-        this.lastTick = Date.now(); // Keep lastTick fresh even while paused
-      }
+      clearTimeout(this.dismissTimeout);
+      this.dismissTimeout = null;
+    }
 
-      this.timerId = requestAnimationFrame(this.tick);
-    };
+    private scheduleDismiss(delay: number): void {
+      this.clearDismissTimeout();
+      this.dismissTimeout = setTimeout(() => this.dismiss(), delay);
+    }
 
-    pause(): void { this.paused = true; }
-    resume(): void { 
-      this.paused = false; 
+    pause(): void {
+      if (!this.visible || this.paused) return;
+
+      this.paused = true;
+      this.remaining = Math.max(0, this.remaining - (performance.now() - this.startedAt));
+      this.clearDismissTimeout();
+    }
+
+    resume(): void {
+      if (!this.visible || !this.paused) return;
+
+      this.paused = false;
+      this.startedAt = performance.now();
+      this.scheduleDismiss(this.remaining);
     }
 
     dismiss(): void {
+      this.clearDismissTimeout();
       this.visible = false;
-      if (this.timerId) cancelAnimationFrame(this.timerId);
+      this.paused = false;
+      this.remaining = this.duration;
     }
   }
 
@@ -96,7 +108,10 @@
     onmouseenter={() => toast.pause()}
     onmouseleave={() => toast.resume()}
   >
-    <div class={["toast-glass", { "is-paused": toast.paused }]}>
+    <div
+      class={["toast-glass", toast.paused && "is-paused"]}
+      style="--toast-duration: {toast.duration}ms"
+    >
       <button
         class="toast-quiet-close"
         onclick={() => toast.dismiss()}
@@ -119,43 +134,40 @@
         </svg>
       </button>
       <div class="toast-img-wrapper">
-        <picture>
-           <source src="/hero/gawdland.avif" type="image/avif" />
-           <img
-            src="/hero/gawdland.avif"
-            alt="Featured Event"
-            class="toast-img"
-            width="80"
-            height="80"
-            loading="eager"
-          />
-        </picture>
+        <enhanced:img
+          src={gawdland}
+          alt="Featured Event"
+          class="toast-img"
+          loading="eager"
+        />
       </div>
       <div class="toast-info">
-        <span class="toast-eyebrow">UPCOMING SHOW</span>
+        <span class="toast-eyebrow">FEATURED EVENT</span>
         <div class="toast-title-wrapper" data-full-title="GAWDLAND Down Under">
           <h3 class="toast-title">GAWDLAND Down Under</h3>
         </div>
         <span class="toast-meta">Thu, Jun 04 &bull; Melbourne</span>
       </div>
       <a
-        href="/upcoming"
+        href="/events"
         class="toast-btn"
         aria-label="View details for GAWDLAND Down Under"
       >
         DISCOVER
       </a>
       <div class="toast-progress-bar">
-        <div 
-          class="toast-progress-fill" 
-          style:transform="scaleX({toast.progress / 100})"
-        ></div>
+        <div class="toast-progress-fill"></div>
       </div>
     </div>
   </div>
 {/if}
 
 <style>
+  @keyframes toast-progress-drain {
+    from { transform: scaleX(1); }
+    to { transform: scaleX(0); }
+  }
+
   .featured-toast {
     position: absolute;
     bottom: clamp(2rem, 5vh, 4rem);
@@ -169,9 +181,9 @@
     display: flex;
     align-items: center;
     gap: 16px;
-    background: rgb(12, 12, 12);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid rgba(var(--color-text-rgb), 0.15);
     border-radius: 4px;
     padding: 12px;
@@ -190,7 +202,6 @@
   .toast-glass:hover {
     border-color: rgba(var(--color-text-rgb), 0.35);
     box-shadow: none;
-    background: rgba(15, 15, 15, 1);
   }
 
   .toast-quiet-close {
@@ -202,7 +213,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(var(--color-bg-rgb), 0.9);
+    background: var(--glass-bg);
     border: 1px solid rgba(var(--color-text-rgb), 0.1);
     box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
     color: rgba(var(--color-text-rgb), 0.4);
@@ -219,8 +230,8 @@
       background 0.3s ease,
       color 0.3s ease;
     z-index: 20;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
   }
 
   /* Absolute Centering for the icon inside the ring */
@@ -416,8 +427,13 @@
     height: 100%;
     background: rgba(var(--color-text-rgb), 0.4);
     transform-origin: left;
-    /* Transformation handled via style:transform for performance */
-    transition: transform 0.1s linear;
+    transform: scaleX(1);
+    animation: toast-progress-drain var(--toast-duration, 15000ms) linear forwards;
+    animation-play-state: running;
+  }
+
+  .toast-glass.is-paused .toast-progress-fill {
+    animation-play-state: paused;
   }
 
   @media (max-width: 1024px) {
@@ -445,5 +461,13 @@
       opacity: 1;
       transform: scale(1);
     }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    /* Shorten all hover transitions */
+    .toast-glass { transition-duration: 0.15s; }
+    .toast-img { transition-duration: 0.15s; }
+    .toast-btn { transition-duration: 0.15s; }
+    .toast-quiet-close { transition-duration: 0.15s; }
   }
 </style>

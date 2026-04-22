@@ -1,5 +1,6 @@
 <script lang="ts">
   import { getMenuState } from "$lib/stores/menu.svelte";
+  import { primaryNavigation } from "$lib/content/navigation";
 
   const menuState = getMenuState();
   import { browser } from "$app/environment";
@@ -13,18 +14,16 @@
 
   let { onclose, isResizing = false }: Props = $props();
 
-  let firstLink: HTMLAnchorElement | undefined = $state();
+  import type { Attachment } from 'svelte/attachments';
+
+  let firstLink: HTMLAnchorElement | undefined;
+  const captureFirstLink: Attachment<HTMLAnchorElement> = (node) => {
+    firstLink = node;
+    return () => { if (firstLink === node) firstLink = undefined; };
+  };
   let lastFocusedElement: HTMLElement | null = null;
 
-  const MENU_LABELS = {
-    home: "Home",
-    about: "About",
-    works: "Works",
-    upcoming: "Upcoming",
-    partnership: "Partnership",
-    contact: "Contact",
-    closeAriaLabel: "Close menu",
-  } as const;
+  const CLOSE_MENU_ARIA_LABEL = "Close menu";
 
 
   function closeMenu() {
@@ -108,32 +107,38 @@
 >
   <div class={["menu-container", menuState.isOpen && "is-open"]}>
     <nav class="menu-links">
-      <a href="/" onclick={closeMenu} bind:this={firstLink}><span>{MENU_LABELS.home}</span></a>
-      <a href="/about" onclick={closeMenu}
-        ><span>{MENU_LABELS.about}</span></a
-      >
-      <a href="/projects" onclick={closeMenu}
-        ><span>{MENU_LABELS.works}</span></a
-      >
-      <a href="/upcoming" onclick={closeMenu}
-        ><span>{MENU_LABELS.upcoming}</span></a
-      >
-      <a href="/partnership" onclick={closeMenu}
-        ><span>{MENU_LABELS.partnership}</span></a
-      >
-      <a href="/contact" onclick={closeMenu}
-        ><span>{MENU_LABELS.contact}</span></a
-      >
+      {#each primaryNavigation as item, index (item.key)}
+        <a
+          href={item.href}
+          onclick={closeMenu}
+          {@attach index === 0 ? captureFirstLink : undefined}
+        >
+          {@render rollingText(item.label)}
+        </a>
+      {/each}
     </nav>
   </div>
 </div>
+
+{#snippet rollingText(label: string)}
+  <span class="rolling-text" aria-label={label}>
+    {#each label.split("") as char, i (i)}
+      <span class="char-wrapper" style="--i: {i}">
+        <span class="char primary">{char === " " ? "\u00A0" : char}</span>
+        <span class="char secondary" aria-hidden="true"
+          >{char === " " ? "\u00A0" : char}</span
+        >
+      </span>
+    {/each}
+  </span>
+{/snippet}
 
 {#if menuState.isOpen}
   <button
     class={["close-btn", isResizing && "no-transition"]}
     in:scale={{ duration: 300, delay: 300, easing: expoOut }}
     onclick={closeMenu}
-    aria-label={MENU_LABELS.closeAriaLabel}
+    aria-label={CLOSE_MENU_ARIA_LABEL}
   >
     <svg class="close-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
@@ -170,7 +175,8 @@
       var(--color-bg);
     display: flex;
     align-items: center;
-    padding-left: calc(100vw - var(--menu-width) + var(--menu-content-offset));
+    padding-left: calc(100vw - var(--menu-width));
+    padding-right: 0;
     z-index: 0;
     pointer-events: none;
     visibility: hidden;
@@ -197,9 +203,9 @@
   .menu-container {
     display: flex;
     flex-direction: column;
-    /* Use exactly 100% of the fixed container height. touch-action none prevents bounce */
     height: 100%;
     justify-content: center;
+    align-items: center;
     position: relative;
     width: 100%;
     box-sizing: border-box;
@@ -210,7 +216,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--menu-link-gap);
-    align-items: flex-start;
+    align-items: center;
   }
 
   .menu-links a {
@@ -255,42 +261,60 @@
   .menu-container.is-open a:nth-child(4) {
     transition-delay: 0.22s;
   }
-  .menu-container.is-open a:nth-child(5) {
-    transition-delay: 0.26s;
-  }
-  .menu-container.is-open a:nth-child(6) {
-    transition-delay: 0.3s;
-  }
-
-  .menu-links a span {
+  .menu-links a .rolling-text {
     font-family: var(--font-primary);
     font-size: var(--menu-link-size);
-    line-height: 1.2;
+    line-height: 1.1;
     letter-spacing: 0.12em;
     font-weight: 600;
     color: var(--color-text);
     text-transform: uppercase;
-    display: inline-block;
-    transform-origin: left center;
+    display: flex;
     transition:
-      transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
-      letter-spacing 0.3s cubic-bezier(0.16, 1, 0.3, 1),
-      font-size 0.4s cubic-bezier(0.22, 1, 0.36, 1),
       color 0.25s ease,
       opacity 0.3s ease;
-    white-space: nowrap;
-    will-change: transform, letter-spacing, color, font-size;
+    will-change: color, opacity;
   }
 
-  .menu-links:hover a:not(:hover) span {
+  .char-wrapper {
+    display: inline-block;
+    position: relative;
+    overflow: hidden;
+    vertical-align: top;
+  }
+
+  .char {
+    display: block;
+    position: relative;
+    transition: transform 0.9s cubic-bezier(0.19, 1, 0.22, 1);
+    transition-delay: calc(var(--i) * 0.035s);
+    will-change: transform;
+  }
+
+  .char.secondary {
+    position: absolute;
+    top: -100%;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .menu-links:hover a:not(:hover) .rolling-text {
     opacity: 0.3;
   }
 
-  .menu-links a:hover span {
+  .menu-links a:hover .rolling-text {
     color: var(--color-white);
-    transform: translateX(12px) skewX(-6deg);
-    letter-spacing: 0.16em;
   }
+
+  .menu-links a:hover .char.primary {
+    transform: translateY(100%);
+  }
+
+  .menu-links a:hover .char.secondary {
+    transform: translateY(100%);
+  }
+
 
   .close-btn {
     position: fixed;
@@ -379,6 +403,20 @@
     .menu-container {
       /* Center the menu links block within the full panel area */
       align-items: center;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    /* Links: smooth fade instead of staggered fly-up */
+    .menu-container.is-open a {
+      transition: opacity 0.35s ease;
+      transform: none;
+    }
+
+    @media (min-width: 1024px) {
+      .close-btn:hover {
+        transform: translate(-50%, -50%) scale(1.05);
+      }
     }
   }
 </style>

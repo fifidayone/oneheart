@@ -1,32 +1,75 @@
 <script lang="ts">
-  import type { Attachment } from 'svelte/attachments';
+  import type { Attachment } from "svelte/attachments";
   import FeaturedToast from "$lib/components/home/FeaturedToast.svelte";
-  import { getScrollState } from "$lib/stores/scroll.svelte";
-
-  const wrapperScroll = getScrollState();
-
-  const BRANDS = $state.raw([
-    { id: "cafedalida", label: "Cafe Dalida", src: "/hero/brands/brand_cafedalida.webp" },
-    { id: "cumparty", label: "Cumparty", src: "/hero/brands/brand_cumparty.webp" },
-    { id: "drthaifans", label: "Dr Thai Fans", src: "/hero/brands/brand_drthaifans.webp" },
-    { id: "laganja", label: "Laganja", src: "/hero/brands/brand_laganja.webp" },
-    { id: "prismgalaxia", label: "Prism Galaxia", src: "/hero/brands/brand_prismgalaxia.webp" },
-  ]);
+  import heroPoster from "$lib/assets/home/hero/hero-poster.avif";
+  import imgMainLogo from "$lib/assets/home/brands/main_oneheart.png?enhanced";
 
   let videoReady = $state(false);
-  let videoEl: HTMLVideoElement | undefined = $state();
+  let videoEl: HTMLVideoElement | undefined;
+  let heroInView = $state(true);
+  let isDocumentHidden = $state(false);
+  let shouldPlayVideo = $derived(heroInView && !isDocumentHidden);
+  // Slab text lockup state for mathematically perfect font scaling
+  let lockupRatio = $state(1);
 
-  let textScale = $derived(Math.max(0.65, 1 - wrapperScroll.y / 1300));
-  let textTranslateY = $derived(Math.min(wrapperScroll.y * 0.35, 130));
+  const measureLockup: Attachment<HTMLElement> = (node) => {
+    const update = () => {
+      const top = node.querySelector(".measure-top") as HTMLElement;
+      const bottom = node.querySelector(".measure-bottom") as HTMLElement;
+      if (top && bottom) {
+        // Use sub-pixel precision, clientWidth rounds integers and breaks alignment
+        const wTop = top.getBoundingClientRect().width;
+        const wBottom = bottom.getBoundingClientRect().width;
+        if (wTop > 0 && wBottom > 0) {
+          lockupRatio = wBottom / wTop;
+        }
+      }
+    };
+
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(document.body);
+    if (document.fonts) document.fonts.ready.then(update);
+
+    return () => ro.disconnect();
+  };
+
+  function updateVideoReadyState(node: HTMLVideoElement) {
+    videoReady = node.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
+  }
 
   const captureVideo: Attachment<HTMLVideoElement> = (node) => {
     videoEl = node;
+    updateVideoReadyState(node);
+
+    const handleVideoReady = () => updateVideoReadyState(node);
+
+    node.addEventListener("loadeddata", handleVideoReady);
+    node.addEventListener("canplay", handleVideoReady);
+    node.addEventListener("playing", handleVideoReady);
 
     return () => {
+      node.removeEventListener("loadeddata", handleVideoReady);
+      node.removeEventListener("canplay", handleVideoReady);
+      node.removeEventListener("playing", handleVideoReady);
+
       if (videoEl === node) {
         videoEl = undefined;
       }
     };
+  };
+
+  const trackHeroVisibility: Attachment<HTMLElement> = (node) => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        heroInView = entry.isIntersecting;
+      },
+      { threshold: 0.05 },
+    );
+
+    observer.observe(node);
+
+    return () => observer.disconnect();
   };
 
   $effect(() => {
@@ -40,39 +83,59 @@
     };
 
     window.addEventListener("click", handleFirstInteraction, { once: true });
-    window.addEventListener("touchstart", handleFirstInteraction, { once: true });
+    window.addEventListener("touchstart", handleFirstInteraction, {
+      once: true,
+    });
 
     return () => {
       window.removeEventListener("click", handleFirstInteraction);
       window.removeEventListener("touchstart", handleFirstInteraction);
     };
   });
+
+  $effect(() => {
+    const updateDocumentVisibility = () => {
+      isDocumentHidden = document.hidden;
+    };
+
+    updateDocumentVisibility();
+    document.addEventListener("visibilitychange", updateDocumentVisibility);
+
+    return () => {
+      document.removeEventListener(
+        "visibilitychange",
+        updateDocumentVisibility,
+      );
+    };
+  });
+
+  $effect(() => {
+    if (!videoEl) return;
+
+    if (shouldPlayVideo) {
+      if (videoEl.paused) {
+        videoEl.play().catch(() => {});
+      }
+
+      return;
+    }
+
+    if (!videoEl.paused) {
+      videoEl.pause();
+    }
+  });
 </script>
 
-{#snippet brandItem(brand: (typeof BRANDS)[number], index: number)}
-  <a
-    href="#{brand.id}"
-    class="brand-item"
-    aria-label={brand.label}
-  >
-    <picture>
-      <source src={brand.src.replace('.webp', '.avif')} type="image/avif" />
-      <img
-        src={brand.src}
-        alt={brand.label}
-        width="32"
-        height="32"
-        loading="eager"
-        decoding="async"
-      />
-    </picture>
-  </a>
-{/snippet}
+<svelte:head>
+  <link rel="preload" as="image" href={heroPoster} fetchpriority="high" />
+</svelte:head>
 
-<div class="home">
+<div class="home" {@attach trackHeroVisibility}>
   <div class="video-background">
     <img
-      src="/media/hero-poster.avif?v=3"
+      src={heroPoster}
+      fetchpriority="high"
+      loading="eager"
       alt=""
       class={["hero-poster", videoReady && "hidden"]}
       width="1920"
@@ -81,7 +144,7 @@
 
     <video
       {@attach captureVideo}
-      poster="/media/hero-poster.avif?v=3"
+      poster={heroPoster}
       autoplay
       muted
       loop
@@ -92,57 +155,65 @@
       onplaying={() => (videoReady = true)}
       class={["hero-video", videoReady && "ready"]}
     >
-      <source src="/media/hero-video.mp4?v=3" type="video/mp4" />
+      <source src="/media/hero-video.mp4" type="video/mp4" />
       Your browser does not support the video tag.
     </video>
   </div>
 
-  <div class="film-grain"></div>
   <div class="overlay"></div>
 
-  <div class="brands-bar-container">
-    <div class="brands-bar-glass">
-      <span class="power-as-one">POWER AS ONE</span>
-      <div class="brands-divider"></div>
-      <div class="brands-list">
-        {#each BRANDS as brand, i (brand.id)}
-          {@render brandItem(brand, i)}
-        {/each}
+  <div class="hero-content">
+    <div class="hero-top-nav">
+      <div class="nav-col">
+        LAGANJA<br />ESTRANJA
+      </div>
+      <div class="nav-col">
+        CAFÉ DALIDA &<br />C.U.M. PARTY
+      </div>
+      <div class="nav-col center">
+        <div class="brand-lockup">
+          <div class="brand-text" {@attach measureLockup}>
+            <span class="brand-line" style="font-size: {lockupRatio}em;"
+              >ONE HEART</span
+            >
+            <span class="brand-line measure-bottom">PRODUCTIONS</span>
+            <!-- Hidden measurement clone to get natural width of ONE HEART at 1em -->
+            <span class="brand-line measurement measure-top" aria-hidden="true"
+              >ONE HEART</span
+            >
+          </div>
+          <enhanced:img
+            src={imgMainLogo}
+            alt="One Heart Logo"
+            class="lockup-logo"
+            width="36"
+            height="36"
+            sizes="36px"
+            loading="eager"
+            decoding="async"
+          />
+        </div>
+      </div>
+      <div class="nav-col">
+        PRISM<br />GALAXIA
+      </div>
+      <div class="nav-col right">
+        DRAG RACE<br />THAI FANS
       </div>
     </div>
-  </div>
 
-  <div
-    class="center-content"
-    style:transform="translateY({textTranslateY}px) scale({textScale})"
-  >
-    <img
-      src="/hero/brands/main_oneheart.webp"
-      alt="One Heart Main Logo"
-      class="main-oneheart-logo"
-      width="160"
-      height="160"
-      decoding="async"
-      loading="eager"
-    />
-    <h1>ONE HEART<br />PRODUCTIONS</h1>
+    <div class="hero-bottom-text">
+      <h2 class="staggered-headline">
+        <span class="hl-line">BRINGING THE BEST OF</span>
+        <span class="hl-line offset">DRAG TO ALL OF ASIA</span>
+      </h2>
+    </div>
   </div>
 
   <FeaturedToast />
 </div>
 
 <style>
-  @keyframes reveal-up {
-    0% {
-      transform: translateY(40px);
-      opacity: 0;
-    }
-    100% {
-      transform: translateY(0);
-      opacity: 1;
-    }
-  }
-
   .home {
     min-height: 100vh;
     width: 100%;
@@ -176,8 +247,8 @@
     transform: translate(-50%, -50%);
     pointer-events: none;
     will-change: opacity;
-    /* Lightened cinematic suppression for better visibility */
-    filter: brightness(0.45) saturate(0.75);
+    /* REMOVED: filter: brightness(0.45) saturate(0.75);
+       Reason: Kills CPU during software decoding. Dimming is now handled by .overlay */
   }
 
   .hero-poster {
@@ -203,234 +274,234 @@
   .overlay {
     position: absolute;
     inset: 0;
-    /* Lightened deep shadow for better video visibility */
-    background: linear-gradient(
-      to bottom,
-      rgba(10, 10, 11, 0.25) 0%,
-      rgba(10, 10, 11, 0.6) 72%,
-      rgba(10, 10, 11, 0.9) 100%
-    );
+    /* Uniform dim to replace video filter: brightness(0.45) ≈ 55% black */
+    background: rgba(10, 10, 11, 0.55);
     z-index: 1;
     pointer-events: none;
   }
 
-  .film-grain {
+  .hero-content {
     position: absolute;
     inset: 0;
-    z-index: 2;
+    z-index: 10;
     pointer-events: none;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-    opacity: 0.04;
-    mix-blend-mode: overlay;
   }
 
-  .center-content {
-    position: relative;
-    z-index: 10; /* Maximize typographic dominance on shadow */
-    text-align: center;
+  /* ─── Top Nav: Flexbox space-between ───
+     Five items spread evenly across the full width.
+     The center lockup is visually dominant via larger type.
+     space-between guarantees equal breathing room between each item. */
+  .hero-top-nav {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: clamp(0.75rem, 1.5vw, 1rem) clamp(2rem, 5vw, 3.5rem);
+    opacity: 0;
+    animation: fade-in-up 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation-delay: 0.1s;
+  }
+
+  /* Brand names — small, quiet, secondary hierarchy */
+  .nav-col {
+    font-family: var(--font-primary);
+    color: var(--color-text, #ffffff);
+    font-size: clamp(0.6rem, 0.75vw, 0.78rem);
+    font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    pointer-events: auto;
+    text-align: left;
+  }
+
+  /* Far right column aligns text right for visual symmetry */
+  .nav-col.right {
+    text-align: right;
+  }
+
+  /* Center lockup: ONE HEART + logo + PRODUCTIONS
+     The logo is absolutely positioned so it never affects
+     text flow, line-height, or alignment. */
+  .nav-col.center {
+    font-size: clamp(1.05rem, 1.5vw, 1.35rem);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    line-height: 1.15;
+  }
+
+  /* brand-lockup: flex row — text block on left, logo on right */
+  .brand-lockup {
+    display: flex;
+    align-items: center;
+    gap: 0; /* Removing gap for tighter control with margins */
+  }
+
+  /* brand-text: column of two lines, width driven by the longer line (PRODUCTIONS) */
+  .brand-text {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    will-change: transform;
+    white-space: nowrap;
   }
 
-  .main-oneheart-logo {
-    width: 160px;
-    height: auto;
-    margin-bottom: 2rem;
-    opacity: 0;
-    animation: reveal-up 1.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    animation-delay: 0.1s;
-    filter: none;
-    -webkit-filter: none;
+  .brand-line {
+    display: block;
+    /* Resetting letter-spacing to 0 is the "Best Practice" for slab-text scaling.
+       If letter-spacing is non-zero, the number of gaps (which differs between lines)
+       prevents a simple font-size ratio from resulting in identical widths. */
+    letter-spacing: 0;
+    margin-right: 0;
+    line-height: 1; /* Tighter line height for the lockup */
   }
 
-  h1 {
+  /* Optical alignment: Curved 'O' needs to overshoot slightly to the left
+     to visually align with the straight stem of the 'P' below it. */
+  .brand-line:first-child {
+    margin-left: -0.03em;
+  }
+
+  .brand-line.measurement {
+    position: absolute;
+    visibility: hidden;
+    pointer-events: none;
+    font-size: 1em; /* Base size to measure ratio against */
+  }
+
+  /* Logo sits as a flex sibling, right of the text block */
+  .lockup-logo {
+    display: block;
+    flex-shrink: 0;
+    width: 3.8em;
+    height: 3.8em;
+    object-fit: contain;
+    margin-left: -0.1em; /* Pushing the logo closer to the text */
+  }
+
+  /* ─── Bottom Headline ─── 
+     Positioned to match Toast: bottom: clamp(2rem, 5vh, 4rem)
+     so both sit on the same baseline. */
+  .hero-bottom-text {
+    position: absolute;
+    bottom: clamp(2rem, 5vh, 4rem);
+    left: clamp(2rem, 5vw, 3.5rem);
+    pointer-events: auto;
+  }
+
+  .staggered-headline {
+    display: flex;
+    flex-direction: column;
     font-family: var(--font-primary);
-    font-size: clamp(2rem, 5.5vw, 5.5rem);
-    font-weight: 700;
-    letter-spacing: 0.03em;
-    line-height: 0.95;
-    color: var(--color-text);
-    text-shadow: none;
+    font-size: clamp(2rem, 4.5vw, 3.8rem);
+    font-weight: 500;
+    line-height: 0.95; /* Tighter leading for premium editorial feel */
+    color: var(--color-text, #ffffff);
     margin: 0;
     text-transform: uppercase;
+    letter-spacing: -0.01em; /* Tighter tracking for density */
+  }
+
+  .hl-line {
+    display: block;
     opacity: 0;
-    animation: reveal-up 1.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation: fade-in-up 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .hl-line:nth-child(1) {
     animation-delay: 0.3s;
-    will-change: transform, opacity;
   }
 
-  .brands-bar-container {
-    position: absolute;
-    top: clamp(1.5rem, 4vh, 2.5rem);
-    right: var(--nav-edge, 2rem);
-    z-index: 10;
-    opacity: 0;
-    animation: reveal-up 1.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    animation-delay: 0.4s;
-    pointer-events: none;
-  }
-
-  .brands-bar-glass {
+  .hl-line.offset {
+    margin-left: 1.5em; /* Awwwards-style staggered indent */
+    color: rgba(255, 255, 255, 0.85); /* Subtle depth without size change */
     display: flex;
     align-items: center;
-    gap: 20px;
-    border: 1px solid rgba(var(--color-text-rgb), 0.15);
-    border-radius: 4px;
-    padding: 10px 20px;
-    /* Zero Shadow */
-    box-shadow: none;
-    pointer-events: auto;
-    position: relative;
-    overflow: hidden;
-    isolation: isolate;
-    transition:
-      border-color 0.4s ease,
-      box-shadow 0.4s ease;
+    gap: 0.4em;
+    animation-delay: 0.45s; /* Staggered entrance animation */
   }
 
-  /* Glass background layer — isolated from content compositing. */
-  .brands-bar-glass::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    /* Solid background for absolute sharpness */
-    background: rgb(12, 12, 12);
-    z-index: -1;
-    pointer-events: none;
+  /* Minimalist accent dash */
+  .hl-line.offset::before {
+    content: '';
+    display: block;
+    width: 1.2em;
+    height: 0.08em;
+    background: currentColor;
+    margin-top: 0.05em;
   }
 
-  /* Removed sweeping light to eliminate fuzziness */
-  .brands-bar-glass::before {
-    display: none;
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
-  /* Zero Shadow - Only Border Contrast */
-  .brands-bar-glass:hover {
-    border-color: rgba(var(--color-text-rgb), 0.3);
-    box-shadow: none;
-    background: rgba(15, 15, 15, 1);
+  /* ─── Tablet ─── */
+  @media (max-width: 1024px) {
+    .nav-col {
+      font-size: clamp(0.55rem, 1.1vw, 0.68rem);
+    }
+    .nav-col.center {
+      font-size: clamp(0.85rem, 2vw, 1.1rem);
+    }
   }
 
-  .power-as-one {
-    font-family: var(--font-primary);
-    font-size: 0.62rem;
-    font-weight: 600;
-    letter-spacing: 0.35em;
-    color: rgba(var(--color-text-rgb), 0.45);
-    text-transform: uppercase;
-    white-space: nowrap;
-    transition: color 0.4s ease;
+  /* ─── Mobile ─── */
+  @media (max-width: 768px) {
+    .hero-top-nav {
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      justify-content: space-between;
+    }
+    /* Center lockup takes full width, first row */
+    .nav-col.center {
+      width: 100%;
+      order: -1;
+      text-align: center;
+      font-size: 0.95rem;
+    }
+    .nav-col {
+      font-size: 0.65rem;
+      width: calc(50% - 0.75rem);
+    }
+    .nav-col:nth-child(2),
+    .nav-col:nth-child(5) {
+      text-align: right;
+    }
+    .staggered-headline {
+      font-size: clamp(1.75rem, 7vw, 2.25rem);
+    }
+    .hl-line.offset {
+      margin-left: 1em; /* Less indent on mobile */
+    }
   }
 
-  .brands-bar-glass:hover .power-as-one {
-    color: rgba(var(--color-text-rgb), 0.9);
-  }
-
-  .brands-divider {
-    width: 1px;
-    height: 20px;
-    background: linear-gradient(
-      to bottom,
-      transparent,
-      rgba(var(--color-text-rgb), 0.12),
-      transparent
-    );
-  }
-
-  .brands-list {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-  }
-
-  .brand-item {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 4px;
-  }
-
-  /* Pure CSS brightness transitions. backdrop-filter is on a separate
-     ::after layer. We use filter: brightness() + blur(0px) to force
-     a permanent high-quality GPU rendering path for the icons. */
-  .brand-item img {
-    width: 32px;
-    height: 32px;
-    object-fit: contain;
-    /* Force GPU rendering and prevent 'mode switching' blur */
-    filter: brightness(0.75) blur(0px);
-    -webkit-filter: brightness(0.75) blur(0px);
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
-    image-rendering: -webkit-optimize-contrast;
-    transition: filter 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  /* When any logo is hovered, dim others slightly more via brightness */
-  .brands-list:hover .brand-item img {
-    filter: brightness(0.35) blur(0px);
-    -webkit-filter: brightness(0.35) blur(0px);
-  }
-
-  /* The actually hovered logo goes full brightness */
-  .brands-list .brand-item:hover img,
-  .brands-list .brand-item:focus-visible img {
-    filter: brightness(1) blur(0px);
-    -webkit-filter: brightness(1) blur(0px);
-  }
-
-  /* Underline sweep — appears on hover, slides in from left */
-  .brand-item::after {
-    content: "";
-    position: absolute;
-    bottom: -2px;
-    left: 4px;
-    right: 4px;
-    height: 1px;
-    background: rgba(var(--color-text-rgb), 0.6);
-    transform: scaleX(0);
-    transform-origin: left center;
-    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  .brand-item:hover::after,
-  .brand-item:focus-visible::after {
-    transform: scaleX(1);
-  }
-
-  @media (max-width: 900px) {
-    .brands-bar-container {
-      top: 1.5rem;
-      right: 0;
-      left: 0;
-      display: flex;
-      justify-content: center;
+  @media (prefers-reduced-motion: reduce) {
+    .hero-top-nav,
+    .hero-bottom-text {
+      animation: none;
+      opacity: 1;
     }
 
-    .brands-bar-glass {
-      padding: 6px 16px;
-      gap: 12px;
+    /* Remove layer promotion hints — counterproductive without GPU */
+    .hero-video,
+    .hero-poster {
+      will-change: auto;
     }
 
-    .power-as-one {
-      font-size: 0.55rem;
-      letter-spacing: 0.25em;
+    /* Shorten video crossfade */
+    .hero-video {
+      transition-duration: 0.5s;
     }
-
-    .brand-item img {
-      width: 24px;
-      height: 24px;
-    }
-
-    .brands-list {
-      gap: 10px;
-    }
-
-    .brands-divider {
-      height: 16px;
+    .hero-poster {
+      transition-duration: 0.5s;
     }
   }
 </style>

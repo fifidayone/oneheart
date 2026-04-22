@@ -1,3 +1,4 @@
+import { dev } from "$app/environment";
 import type { RequestHandler } from "./$types";
 import {
   getMediaBucket,
@@ -23,7 +24,12 @@ export const GET: RequestHandler = async ({ platform }) => {
 
     const headers = new Headers();
     headers.set("content-type", object.httpMetadata?.contentType ?? "image/avif");
-    headers.set("cache-control", "public, max-age=3600");
+    
+    // Performance: stale-while-revalidate allows serving a 'stale' image while updating background
+    headers.set("cache-control", dev ? "no-store" : "public, max-age=3600, stale-while-revalidate=86400");
+    
+    headers.set("vary", "Accept");
+    headers.set("x-content-type-options", "nosniff");
     headers.set("etag", object.httpEtag);
     headers.set("content-length", object.size.toString());
 

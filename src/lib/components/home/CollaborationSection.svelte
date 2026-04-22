@@ -1,205 +1,239 @@
 <script lang="ts">
   import type { Attachment } from "svelte/attachments";
+  import { innerWidth as windowWidth } from "svelte/reactivity/window";
+  import { DragState } from "$lib/logic/drag.svelte";
 
-  let isDragging = $state(false);
-  let worldContainer: HTMLElement | null = $state(null);
+  // Asset Imports
+  import imgAnetra from "$lib/assets/home/collab/anetra.jpg?enhanced";
+  import imgAquria from "$lib/assets/home/collab/aquria.jpg?enhanced";
+  import imgMarina from "$lib/assets/home/collab/marina.jpg?enhanced";
+  import imgNicky from "$lib/assets/home/collab/nicky.jpg?enhanced";
+  import imgNymphia from "$lib/assets/home/collab/nymphia.jpg?enhanced";
 
-  let targetX = 0;
-  let targetY = 0;
-  let currentX = 0;
-  let currentY = 0;
+  // Static Data (Using pure JS outside script for Zero-Reactivity overhead)
+  const IMAGES = [imgAnetra, imgAquria, imgMarina, imgNicky, imgNymphia];
+  const GRID_ITEMS = $state.raw([
+    IMAGES[0],
+    IMAGES[2],
+    IMAGES[4],
+    IMAGES[1],
+    IMAGES[3],
+    IMAGES[3],
+    IMAGES[0],
+    IMAGES[1],
+    IMAGES[4],
+    IMAGES[2],
+    IMAGES[1],
+    IMAGES[4],
+    IMAGES[2],
+    IMAGES[3],
+    IMAGES[0],
+    IMAGES[4],
+    IMAGES[3],
+    IMAGES[0],
+    IMAGES[2],
+    IMAGES[1],
+  ]);
 
-  let camCol = $state(0);
-  let camRow = $state(0);
+  // Reactive State
+  const drag = new DragState();
+  let innerWidth = $derived(windowWidth.current ?? 1024);
+  let worldContainer: HTMLElement | null = null;
+  let rafId: number | undefined;
+  let isSectionVisible = $state(false);
+  let isDocumentHidden = $state(false);
+  let shouldAnimate = $derived(isSectionVisible && !isDocumentHidden);
 
-  let startX = 0;
-  let startY = 0;
-  let velocityX = 0;
-  let velocityY = 0;
-  let lastX = 0;
-  let lastY = 0;
-  let lastTime = 0;
-  let rafId: number;
-
-  const DRIFT_X = -0.3;
-  const DRIFT_Y = -0.15;
-
-  // Responsive Grid Logic
-  let innerWidth = $state(1024);
+  // Derived Grid Metrics
   const COLS = 5;
   const ROWS = 4;
   let TILE_WIDTH = $derived(innerWidth <= 768 ? 160 : 260);
   let TILE_HEIGHT = $derived(innerWidth <= 768 ? 213 : 347);
-  
-  /* Pure dimensions: utilizing inner borders natively consumes the 1px seam mathematically */
   let BLOCK_WIDTH = $derived(COLS * TILE_WIDTH);
   let BLOCK_HEIGHT = $derived(ROWS * TILE_HEIGHT);
+  let KEYBOARD_STEP_X = $derived(innerWidth <= 768 ? 120 : 180);
+  let KEYBOARD_STEP_Y = $derived(innerWidth <= 768 ? 150 : 220);
 
-  const captureWorld: Attachment<HTMLElement> = (node) => {
-    worldContainer = node;
+  // Viewport Paging
+  let camCol = $derived(Math.floor(-drag.currentX / BLOCK_WIDTH));
+  let camRow = $derived(Math.floor(-drag.currentY / BLOCK_HEIGHT));
+
+  function syncWorldPosition() {
+    if (!worldContainer) return;
+
+    worldContainer.style.setProperty("--world-x", `${drag.currentX}px`);
+    worldContainer.style.setProperty("--world-y", `${drag.currentY}px`);
+  }
+
+  function stopWorldLoop() {
+    if (rafId === undefined) return;
+
+    cancelAnimationFrame(rafId);
+    rafId = undefined;
+  }
+
+  function startWorldLoop() {
+    if (rafId !== undefined || !worldContainer) return;
 
     function tick() {
-      if (!isDragging) {
-        velocityX *= 0.93;
-        velocityY *= 0.93;
-        if (Math.abs(velocityX) < 0.05) velocityX = 0;
-        if (Math.abs(velocityY) < 0.05) velocityY = 0;
-
-        targetX += velocityX * 10 + DRIFT_X;
-        targetY += velocityY * 10 + DRIFT_Y;
-      }
-
-      currentX += (targetX - currentX) * 0.1;
-      currentY += (targetY - currentY) * 0.1;
-
-      if (worldContainer) {
-        worldContainer.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
-      }
-
-      if (BLOCK_WIDTH > 0 && BLOCK_HEIGHT > 0) {
-        const newCamCol = Math.floor(-currentX / BLOCK_WIDTH);
-        const newCamRow = Math.floor(-currentY / BLOCK_HEIGHT);
-        if (newCamCol !== camCol) camCol = newCamCol;
-        if (newCamRow !== camRow) camRow = newCamRow;
-      }
-
+      drag.update();
+      syncWorldPosition();
       rafId = requestAnimationFrame(tick);
     }
 
     rafId = requestAnimationFrame(tick);
+  }
+
+  const trackSectionVisibility: Attachment<HTMLElement> = (node) => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        isSectionVisible = entry.isIntersecting;
+      },
+      { threshold: 0.05 },
+    );
+
+    observer.observe(node);
+
+    return () => observer.disconnect();
+  };
+
+  const captureWorld: Attachment<HTMLElement> = (node) => {
+    worldContainer = node;
+    syncWorldPosition();
+
+    if (shouldAnimate) {
+      startWorldLoop();
+    }
 
     return () => {
-      cancelAnimationFrame(rafId);
+      stopWorldLoop();
       worldContainer = null;
     };
   };
 
-  function pointerDown(e: PointerEvent) {
+  $effect(() => {
+    const updateDocumentVisibility = () => {
+      isDocumentHidden = document.hidden;
+    };
+
+    updateDocumentVisibility();
+    document.addEventListener("visibilitychange", updateDocumentVisibility);
+
+    return () => {
+      document.removeEventListener("visibilitychange", updateDocumentVisibility);
+    };
+  });
+
+  $effect(() => {
+    if (shouldAnimate) {
+      startWorldLoop();
+    } else {
+      stopWorldLoop();
+      syncWorldPosition();
+    }
+  });
+
+  function handlePointerDown(e: PointerEvent) {
     if (e.button !== 0 && e.pointerType === "mouse") return;
-    isDragging = true;
-    startX = e.clientX - targetX;
-    startY = e.clientY - targetY;
-    lastX = e.clientX;
-    lastY = e.clientY;
-    lastTime = performance.now();
-    const el = e.currentTarget as HTMLElement;
-    el.setPointerCapture(e.pointerId);
+    drag.start(e);
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   }
 
-  function pointerMove(e: PointerEvent) {
-    if (!isDragging) return;
-    targetX = e.clientX - startX;
-    targetY = e.clientY - startY;
-    const now = performance.now();
-    const dt = now - lastTime;
-    if (dt > 1) {
-      velocityX = (e.clientX - lastX) / dt;
-      velocityY = (e.clientY - lastY) / dt;
-    }
-    lastX = e.clientX;
-    lastY = e.clientY;
-    lastTime = now;
+  function handlePointerMove(e: PointerEvent) {
+    drag.move(e);
   }
 
-  function pointerUp(e: PointerEvent) {
-    isDragging = false;
-    const el = e.currentTarget as HTMLElement;
-    if (el.hasPointerCapture(e.pointerId)) {
-      el.releasePointerCapture(e.pointerId);
+  function handlePointerUp(e: PointerEvent) {
+    drag.stop();
+    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+  }
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      drag.nudge(KEYBOARD_STEP_X, 0);
+    } else if (e.key === "ArrowRight") {
+      e.preventDefault();
+      drag.nudge(-KEYBOARD_STEP_X, 0);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      drag.nudge(0, KEYBOARD_STEP_Y);
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      drag.nudge(0, -KEYBOARD_STEP_Y);
     }
   }
-
-  const IMAGES = [
-    "/collab/anetra.avif",
-    "/collab/aquria.avif",
-    "/collab/marina.avif",
-    "/collab/nicky.avif",
-    "/collab/nymphia.avif",
-  ];
-
-  const GRID_ITEMS = [
-    IMAGES[0],
-    IMAGES[2],
-    IMAGES[4],
-    IMAGES[1],
-    IMAGES[3],
-    IMAGES[3],
-    IMAGES[0],
-    IMAGES[1],
-    IMAGES[4],
-    IMAGES[2],
-    IMAGES[1],
-    IMAGES[4],
-    IMAGES[2],
-    IMAGES[3],
-    IMAGES[0],
-    IMAGES[4],
-    IMAGES[3],
-    IMAGES[0],
-    IMAGES[2],
-    IMAGES[1],
-  ];
 </script>
-
-<svelte:window bind:innerWidth />
 
 {#snippet frameMarker(pos: "tl" | "tr" | "bl" | "br", label: string)}
   <div class={["frame-marker", pos]}><span>{label}</span></div>
 {/snippet}
 
-<section class="collaboration">
+<section class="collaboration" {@attach trackSectionVisibility}>
   <div class="editorial-master-frame">
-    <!-- Texture Layers -->
-    <div class="film-grain"></div>
+
     <div class="vignette-overlay"></div>
 
-    <!-- Editorial Markers (Corners) -->
-    {@render frameMarker("tl", "REF. 082 / COLLAB")}
-    {@render frameMarker("tr", "ARC.GRID.01")}
-    {@render frameMarker("bl", "INDEX_5ARTISTS")}
+    {@render frameMarker("tl", "REF. 88 / GRID")}
+    {@render frameMarker("tr", "COLLAB.ARCH.01")}
+    {@render frameMarker("bl", "DRAG_ECOSYSTEM")}
     {@render frameMarker("br", "ONE HEART PRODUCTIONS")}
 
-    <!-- Centered Fixed Typography (Stationary Label) -->
     <div class="fixed-label-container">
       <div class="anchor-line"></div>
       <div class="brand-lockup">
-        <span class="eyebrow-spaced">Professional Network</span>
+        <span class="eyebrow-spaced">Editorial Network</span>
         <h2 class="section-title">
           <span class="main-word">Collaboration</span>
-          <span class="sub-line italic">Across the ecosystem</span>
+          <span class="sub-line italic">Across the high-energy spectrum</span>
         </h2>
       </div>
       <div class="anchor-line bottom"></div>
     </div>
 
+    <p class="sr-only" id="collaboration-canvas-help">
+      Drag to explore the collaboration canvas. You can also use the arrow keys
+      to pan the grid.
+    </p>
+
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
-      class={["drag-viewport", isDragging && "grabbing"]}
+      class={["drag-viewport", drag.isDragging && "grabbing"]}
       role="application"
-      onpointerdown={pointerDown}
-      onpointermove={pointerMove}
-      onpointerup={pointerUp}
+      aria-roledescription="draggable collaboration canvas"
+      tabindex="0"
+      aria-label="Collaboration canvas"
+      aria-describedby="collaboration-canvas-help"
+      onpointerdown={handlePointerDown}
+      onpointermove={handlePointerMove}
+      onpointerup={handlePointerUp}
+      onpointercancel={handlePointerUp}
+      onkeydown={handleKeydown}
     >
       <div class="world-container" {@attach captureWorld}>
         {#each [camCol - 1, camCol, camCol + 1] as col (col)}
           {#each [camRow - 1, camRow, camRow + 1] as row (row)}
             <div
               class="grid-block"
-              style:transform="translate3d({col * BLOCK_WIDTH}px, {row * BLOCK_HEIGHT}px, 0)"
+              style:transform="translate3d({col * BLOCK_WIDTH}px, {row *
+                BLOCK_HEIGHT}px, 0)"
               style:--tile-w="{TILE_WIDTH}px"
               style:--tile-h="{TILE_HEIGHT}px"
             >
               {#each GRID_ITEMS as imgSrc, i (`${imgSrc}-${i}`)}
                 <div class="grid-item">
                   <div class="img-wrapper">
-                    <img
+                    <enhanced:img
                       src={imgSrc}
-                      alt="Artist"
+                      alt="Artist Focus"
                       class="artist-thumb"
                       draggable="false"
                       loading="lazy"
+                      sizes="(max-width: 768px) 160px, 260px"
                     />
                   </div>
+                  <div class="scanning-frame"></div>
                 </div>
               {/each}
             </div>
@@ -218,58 +252,50 @@
     background: #000;
     overflow: hidden;
     z-index: 1;
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
   }
 
-  /* ── Master Frame ── */
   .editorial-master-frame {
     position: absolute;
-    inset: 4vw;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    background: #050505;
+    inset: 5vw;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: #030303;
     overflow: hidden;
-    box-shadow: 0 40px 100px -20px rgba(0, 0, 0, 0.9);
+    box-shadow: 0 50px 100px -20px rgba(0, 0, 0, 0.9);
   }
 
-  /* ── Texture ── */
-  .film-grain {
-    position: absolute;
-    inset: 0;
-    z-index: 10;
-    pointer-events: none;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-    opacity: 0.04;
-    mix-blend-mode: overlay;
-  }
 
   .vignette-overlay {
     position: absolute;
     inset: 0;
     z-index: 8;
     pointer-events: none;
-    /* Removed fuzzy box-shadow, replaced with subtle precision inner border */
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    background: radial-gradient(
+      circle at center,
+      transparent 40%,
+      rgba(0, 0, 0, 0.4) 100%
+    );
   }
 
-  /* ── Editorial Markers ── */
   .frame-marker {
     position: absolute;
     z-index: 12;
-    padding: 1.5rem;
-    font-family: var(--font-primary, sans-serif);
+    padding: 1.25rem;
+    font-family: var(--font-primary);
     font-size: 0.55rem;
-    font-weight: 500;
-    letter-spacing: 0.3em;
-    color: rgba(255, 255, 255, 0.25);
+    font-weight: 600;
+    letter-spacing: 0.35em;
+    color: rgba(255, 255, 255, 0.3);
     text-transform: uppercase;
   }
 
   .frame-marker::before {
     content: "";
     position: absolute;
-    width: 24px;
-    height: 24px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    width: 20px;
+    height: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
   }
 
   .tl {
@@ -315,7 +341,6 @@
     border-top: 0;
   }
 
-  /* ── Centered Fixed Typography ── */
   .fixed-label-container {
     position: absolute;
     top: 50%;
@@ -327,76 +352,73 @@
     flex-direction: column;
     align-items: center;
     text-align: center;
-    gap: 2rem;
   }
 
   .anchor-line {
     width: 1px;
-    height: 80px;
-    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.15), transparent);
+    height: 100px;
+    background: linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.2),
+      transparent
+    );
   }
 
   .anchor-line.bottom {
-    background: linear-gradient(to top, rgba(255, 255, 255, 0.15), transparent);
+    background: linear-gradient(to top, rgba(255, 255, 255, 0.2), transparent);
   }
 
   .brand-lockup {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 1.5rem;
-    padding: 3rem 5rem;
-    /* Removed radial-gradient slop, relying on pure contrast */
+    gap: 1.25rem;
+    padding: 2.5rem 4rem;
   }
 
   .eyebrow-spaced {
-    font-size: 0.65rem;
-    font-weight: 600;
-    letter-spacing: 0.6em;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.5em;
     text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.4);
-    margin-right: -0.6em;
-  }
-
-  .section-title {
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    line-height: 0.9;
+    color: rgba(255, 255, 255, 0.5);
+    margin-right: -0.5em;
   }
 
   .main-word {
-    font-family: var(--font-heading, "Inter", sans-serif);
-    font-size: clamp(1.8rem, 6vw, 4.5rem);
+    font-family: var(--font-heading);
+    font-size: clamp(2rem, 7vw, 5rem);
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.15em;
+    letter-spacing: 0.12em;
     color: #fff;
-    margin-right: -0.15em;
+    margin-right: -0.12em;
   }
 
   .sub-line.italic {
-    font-family: var(--font-primary, serif);
-    font-size: clamp(1.2rem, 2vw, 1.8rem);
+    font-family: var(--font-primary);
+    font-size: clamp(1.1rem, 1.8vw, 1.6rem);
     font-weight: 300;
     font-style: italic;
-    color: rgba(255, 255, 255, 0.6);
-    margin-top: 0.5rem;
-    letter-spacing: 0.05em;
+    color: rgba(255, 255, 255, 0.7);
+    letter-spacing: 0.04em;
   }
 
-  /* ── Viewport & Grid ── */
   .drag-viewport {
     position: absolute;
     inset: 0;
     z-index: 5;
     cursor: grab;
-    touch-action: pan-y; /* Prevent getting stuck on mobile; allow vertical page scroll */
+    touch-action: pan-y;
   }
 
   .drag-viewport.grabbing {
     cursor: grabbing;
+  }
+
+  .drag-viewport:focus-visible {
+    outline: 2px solid rgba(var(--color-text-rgb), 0.92);
+    outline-offset: -2px;
   }
 
   .world-container {
@@ -406,7 +428,7 @@
     width: 0;
     height: 0;
     will-change: transform;
-    transform-style: preserve-3d;
+    transform: translate3d(var(--world-x, 0), var(--world-y, 0), 0);
   }
 
   .grid-block {
@@ -416,11 +438,7 @@
     display: grid;
     grid-template-columns: repeat(5, var(--tile-w));
     grid-template-rows: repeat(4, var(--tile-h));
-    background: transparent;
-    /* GPU Stability */
     backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
-    transform: translateZ(0);
   }
 
   .grid-item {
@@ -429,18 +447,26 @@
     background: #000;
     overflow: hidden;
     position: relative;
-    clip-path: inset(0);
-    box-sizing: border-box;
-    /* Architecture: Move the gap logic to internalized borders */
-    border-right: 1px solid rgba(255, 255, 255, 0.04);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   }
 
   .img-wrapper {
     width: 100%;
     height: 100%;
     overflow: hidden;
-    transform: translateZ(0);
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 
   .artist-thumb {
@@ -448,44 +474,62 @@
     height: 100%;
     object-fit: cover;
     object-position: center 25%;
-    opacity: 0.5;
-    filter: saturate(0.7) contrast(1.1) brightness(0.6); /* Muted cinematic colors for premium feel */
+    opacity: 0.45;
+    filter: saturate(0.6) brightness(0.7);
     transition:
       transform 1.2s cubic-bezier(0.16, 1, 0.3, 1),
       opacity 0.8s ease,
       filter 0.8s ease;
-    will-change: transform;
+  }
+
+  .scanning-frame {
+    position: absolute;
+    inset: 0;
+    border: 1px solid rgba(255, 255, 255, 0);
+    pointer-events: none;
+    z-index: 5;
+    transition: border-color 0.4s ease;
   }
 
   .grid-item:hover .artist-thumb {
     opacity: 1;
-    transform: scale(1.03); /* Subtle scale for more luxury feel */
-    filter: saturate(1) contrast(1) brightness(1); /* Reveal full color on hover */
+    transform: scale(1.04);
+    filter: saturate(1.1) brightness(1.1);
+  }
+
+  .grid-item:hover .scanning-frame {
+    border-color: rgba(255, 255, 255, 0.2);
   }
 
   @media (max-width: 1024px) {
     .editorial-master-frame {
-      inset: 1.5rem;
-      border-color: rgba(255, 255, 255, 0.08);
-    }
-    .fixed-label-container {
-      width: 92%;
-    }
-    .anchor-line {
-      display: none;
+      inset: 1.25rem;
     }
     .brand-lockup {
-      padding: 1.5rem 1rem;
+      padding: 2rem 1rem;
     }
-    /* Scale down markers but keep the editorial vibe */
     .frame-marker {
       padding: 0.75rem;
       font-size: 0.45rem;
-      opacity: 0.7;
     }
-    .frame-marker::before {
-      width: 16px;
-      height: 16px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+
+    /* Remove GPU layer promotion hints — counterproductive on CPU */
+    .world-container {
+      will-change: auto;
+    }
+    .grid-block {
+      backface-visibility: visible;
+    }
+
+    /* Hover transitions: keep effect, shorten duration */
+    .artist-thumb {
+      transition-duration: 0.15s;
+    }
+    .scanning-frame {
+      transition-duration: 0.15s;
     }
   }
 </style>

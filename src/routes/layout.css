@@ -40,6 +40,25 @@
   -moz-osx-font-smoothing: grayscale;
   color: var(--color-text);
   background: var(--color-bg);
+
+  /* --- Glass Design System (Centralized) --- */
+  /* Normal Mode: Premium Blurs & Opacities */
+  --glass-blur: blur(12px);
+  --glass-blur-heavy: blur(24px) saturate(180%);
+  --glass-bg: rgba(15, 15, 16, 0.85);       /* For Toasts - Solid but Deep */
+  --glass-bg-heavy: rgba(12, 12, 12, 0.88);  /* For Hero Bar - Dense Premium Glass */
+  --glass-bg-light: rgba(var(--color-text-rgb), 0.05);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    /* Reduced Mode: No Blur, High Opacity for readability */
+    --glass-blur: none;
+    --glass-blur-heavy: none;
+    --glass-bg: rgba(10, 10, 10, 0.98);
+    --glass-bg-heavy: rgba(10, 10, 10, 0.95);
+    --glass-bg-light: rgba(var(--color-text-rgb), 0.1);
+  }
 }
 
 html,

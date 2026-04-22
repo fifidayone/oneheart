@@ -4,13 +4,21 @@
 
   const wrapperScroll = getScrollState();
 
+  import typo1 from "$lib/assets/home/story/images/1.jpg?enhanced";
+  import typo2 from "$lib/assets/home/story/images/2.jpg?enhanced";
+  import typo3 from "$lib/assets/home/story/images/3.jpg?enhanced";
+  import typo4 from "$lib/assets/home/story/images/4.jpg?enhanced";
+  import typo5 from "$lib/assets/home/story/images/5.jpg?enhanced";
+  import typo6 from "$lib/assets/home/story/images/6.jpg?enhanced";
+
   const PHOTOS = [
-    { src: "/typo/1.avif", width: 1856, height: 2298 },
-    { src: "/typo/2.avif", width: 1856, height: 2298 },
-    { src: "/typo/3.avif", width: 1856, height: 2298 },
-    { src: "/typo/4.avif", width: 1856, height: 2298 },
-    { src: "/typo/5.avif", width: 1856, height: 2298 },
-  ] as const;
+    { src: typo1 },
+    { src: typo2 },
+    { src: typo3 },
+    { src: typo4 },
+    { src: typo5 },
+    { src: typo6 },
+  ];
 
   const STORY_WORDS = [
     "BRINGING",
@@ -27,6 +35,8 @@
 
   let metrics = $state({ top: 0, range: 0 });
   let revealed = $state(false);
+  let isSectionActive = $state(false);
+  let scrollProgress = $state(0);
 
   const measure: Attachment<HTMLElement> = (node) => {
     const update = () => {
@@ -35,12 +45,18 @@
     };
 
     const observer = new ResizeObserver(update);
+    const activityObserver = new IntersectionObserver(([entry]) => {
+      isSectionActive = entry.isIntersecting;
+    });
+
     observer.observe(node);
-    window.addEventListener("resize", update);
+    activityObserver.observe(node);
+    window.addEventListener("resize", update, { passive: true });
     update();
 
     return () => {
       observer.disconnect();
+      activityObserver.disconnect();
       window.removeEventListener("resize", update);
     };
   };
@@ -55,8 +71,7 @@
       },
       {
         threshold: 0.15,
-        root: null,
-        rootMargin: "0px 0px -40px 0px",
+        rootMargin: "0px 0px -10% 0px",
       },
     );
 
@@ -64,17 +79,21 @@
     return () => observer.disconnect();
   };
 
-  let scrollProgress = $derived.by(() => {
-    if (!metrics || metrics.range <= 0) return 0;
+  let liveScrollProgress = $derived.by(() => {
+    if (metrics.range <= 0) return 0;
     return Math.min(1, Math.max(0, (wrapperScroll.y - metrics.top) / metrics.range));
   });
 
-  // Phase 1 (Holding): 0.0 -> 0.30
-  // Phase 2 (Transition - Scale Reveal): 0.30 -> 0.46
-  let transitionProgress = $derived(Math.min(1, Math.max(0, (scrollProgress - 0.30) / 0.16)));
+  // Freeze scroll-driven work while the sticky range is fully offscreen.
+  $effect(() => {
+    if (isSectionActive) {
+      scrollProgress = liveScrollProgress;
+    }
+  });
 
-  // Phase 3 (Photos sequence): 0.46 -> 1.0
-  let photoProgress = $derived(Math.min(1, Math.max(0, (scrollProgress - 0.46) / 0.54)));
+  // Animation Phasing (Restored to exact original logic)
+  let transitionProgress = $derived(Math.min(1, Math.max(0, (scrollProgress - 0.25) / 0.15)));
+  let photoProgress = $derived(Math.min(1, Math.max(0, (scrollProgress - 0.40) / 0.60)));
 
   let activePhoto = $derived(
     Math.min(PHOTOS.length - 1, Math.floor(photoProgress * PHOTOS.length)),
@@ -93,13 +112,18 @@
       <div class="typo-wrapper">
         <div class={["typo-narrative", revealed && "revealed"]} {@attach inView}>
           {#each STORY_WORDS as word, i (`${i}-${word}`)}
-            <span class="word" style="transition-delay: {0.05 + i * 0.04}s">
+            <span class="word" style="transition-delay: {0.05 + i * 0.03}s">
               {word}
             </span>
           {/each}
           <span
-            class="word highlight aurora-text"
-            style="transition-delay: {0.05 + STORY_WORDS.length * 0.04}s"
+            class={[
+              "word",
+              "highlight",
+              "aurora-text",
+              revealed && isSectionActive && "is-flowing",
+            ]}
+            style="transition-delay: {0.05 + STORY_WORDS.length * 0.03}s"
             data-text={HIGHLIGHT}
           >
             {HIGHLIGHT}
@@ -108,7 +132,7 @@
       </div>
 
       <div class="photo-canvas">
-        <div class="canvas-grain"></div>
+
         {@render corner("tl")}
         {@render corner("tr")}
         {@render corner("bl")}
@@ -120,7 +144,7 @@
         </div>
         <div class="canvas-images">
           {#each PHOTOS as photo, i (photo.src)}
-            <img
+            <enhanced:img
               class={[
                 "canvas-img",
                 i === activePhoto && "active",
@@ -128,10 +152,9 @@
                 i > activePhoto && "next",
               ]}
               src={photo.src}
-              alt="One Heart Productions – visual {i + 1}"
+              alt="Editorial Visual {i + 1}"
               loading={i === 0 ? "eager" : "lazy"}
-              width={photo.width}
-              height={photo.height}
+              sizes="(max-width: 1024px) 85vw, 430px"
             />
           {/each}
         </div>
@@ -141,35 +164,15 @@
 </div>
 
 <style>
-
-
   @keyframes aurora-flow {
-    0% {
-      background-position: 0% 50%;
-    }
-    50% {
-      background-position: 100% 50%;
-    }
-    100% {
-      background-position: 0% 50%;
-    }
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
   }
 
-  @keyframes filmGrain {
-    0%,
-    100% {
-      transform: translate(0, 0);
-    }
-    33% {
-      transform: translate(-2%, -1%);
-    }
-    66% {
-      transform: translate(1%, 2%);
-    }
-  }
 
   .story-pin-outer {
-    height: 500vh;
+    height: 600vh;
     position: relative;
   }
 
@@ -186,24 +189,51 @@
     overflow: hidden;
   }
 
-
-
   .dot-pattern-bg {
     position: absolute;
     inset: 0;
     z-index: 1;
     pointer-events: none;
-    background-image: radial-gradient(
-        ellipse at center,
-        transparent 30%,
-        var(--color-bg-dark) 90%
-      ),
-      /* Increased opacity from 0.1 to 0.18 for better visibility */
-      radial-gradient(rgba(var(--color-text-rgb), 0.18) 1px, transparent 1px);
-    background-size:
-      100% 100%,
-      24px 24px; /* Slightly tighter grid for more premium feel */
+    background-image: radial-gradient(rgba(var(--color-text-rgb), 0.18) 1px, transparent 1px);
+    background-size: 24px 24px;
     background-position: center;
+    opacity: 0.95;
+    mask-image:
+      linear-gradient(
+        180deg,
+        rgba(0, 0, 0, 0.22) 0%,
+        rgba(0, 0, 0, 0.78) 18%,
+        rgba(0, 0, 0, 1) 50%,
+        rgba(0, 0, 0, 0.76) 82%,
+        rgba(0, 0, 0, 0.24) 100%
+      ),
+      linear-gradient(
+        90deg,
+        rgba(0, 0, 0, 0.3) 0%,
+        rgba(0, 0, 0, 0.86) 16%,
+        rgba(0, 0, 0, 1) 50%,
+        rgba(0, 0, 0, 0.82) 84%,
+        rgba(0, 0, 0, 0.34) 100%
+      );
+    mask-composite: intersect;
+    -webkit-mask-image:
+      linear-gradient(
+        180deg,
+        rgba(0, 0, 0, 0.22) 0%,
+        rgba(0, 0, 0, 0.78) 18%,
+        rgba(0, 0, 0, 1) 50%,
+        rgba(0, 0, 0, 0.76) 82%,
+        rgba(0, 0, 0, 0.24) 100%
+      ),
+      linear-gradient(
+        90deg,
+        rgba(0, 0, 0, 0.3) 0%,
+        rgba(0, 0, 0, 0.86) 16%,
+        rgba(0, 0, 0, 1) 50%,
+        rgba(0, 0, 0, 0.82) 84%,
+        rgba(0, 0, 0, 0.34) 100%
+      );
+    -webkit-mask-composite: source-in;
   }
 
   .story-container {
@@ -241,8 +271,6 @@
     color: rgba(var(--color-text-rgb), 0.06);
     transform: translateY(40px) scale(0.9);
     opacity: 0;
-    transform: translateY(30px);
-    opacity: 0;
     transition:
       color 1.2s cubic-bezier(0.16, 1, 0.3, 1),
       transform 1.4s cubic-bezier(0.16, 1, 0.3, 1),
@@ -254,11 +282,10 @@
   .typo-narrative.revealed .word {
     transform: translateY(0) scale(1);
     opacity: 1;
-    /* Changed to solid opaque gray to prevent background dots from showing through */
     color: #555555;
   }
 
-  .typo-narrative.revealed .word:hover {
+  .typo-narrative.revealed .word:not(.highlight):hover {
     color: var(--color-white);
     transform: scale(1.05);
     transition-delay: 0s !important;
@@ -267,7 +294,7 @@
     z-index: 10;
   }
 
-  .typo-narrative .word.highlight.aurora-text {
+  .word.highlight.aurora-text {
     font-weight: 700;
     position: relative;
     background: linear-gradient(
@@ -288,13 +315,11 @@
     -webkit-text-stroke: 1px rgba(255, 255, 255, 0.06);
   }
 
-
-
-  .typo-narrative.revealed .word.highlight.aurora-text {
+  .typo-narrative.revealed .word.highlight.aurora-text.is-flowing {
     animation: aurora-flow 8s linear infinite;
   }
 
-  .typo-narrative.revealed .word.highlight.aurora-text:hover {
+  .typo-narrative.revealed .word.highlight.aurora-text.is-flowing:hover {
     animation: aurora-flow 3s linear infinite;
     transform: scale(1.02) translateY(-2px);
   }
@@ -302,7 +327,6 @@
   .photo-canvas {
     position: relative;
     width: 100%;
-    /* Scale Reveal: Starts hidden and slightly smaller, then blooms in place */
     opacity: var(--t-prog, 1);
     transform: scale(calc(0.88 + 0.12 * var(--t-prog, 1)));
     will-change: transform, opacity;
@@ -312,22 +336,12 @@
     border: 1px solid rgba(var(--color-text-rgb), 0.12);
     background: var(--color-bg-panel);
     overflow: hidden;
-    box-shadow:
+    box-shadow: 
       inset 0 0 60px rgba(var(--color-bg-rgb), 0.6),
       0 0 0 1px rgba(var(--color-text-rgb), 0.04),
       0 24px 80px rgba(var(--color-bg-rgb), 0.5);
   }
 
-  .canvas-grain {
-    position: absolute;
-    inset: 0;
-    z-index: 4;
-    pointer-events: none;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-    opacity: 0.06;
-    mix-blend-mode: overlay;
-    animation: filmGrain 0.8s steps(3) infinite;
-  }
 
   .canvas-corner {
     position: absolute;
@@ -344,42 +358,13 @@
     background: rgba(var(--color-text-rgb), 0.5);
   }
 
-  .canvas-corner::before {
-    width: 100%;
-    height: 1px;
-    top: 0;
-    left: 0;
-  }
+  .canvas-corner::before { width: 100%; height: 1px; top: 0; left: 0; }
+  .canvas-corner::after { width: 1px; height: 100%; top: 0; left: 0; }
 
-  .canvas-corner::after {
-    width: 1px;
-    height: 100%;
-    top: 0;
-    left: 0;
-  }
-
-  .canvas-corner.tl {
-    top: 12px;
-    left: 12px;
-  }
-
-  .canvas-corner.tr {
-    top: 12px;
-    right: 12px;
-    transform: scaleX(-1);
-  }
-
-  .canvas-corner.bl {
-    bottom: 12px;
-    left: 12px;
-    transform: scaleY(-1);
-  }
-
-  .canvas-corner.br {
-    bottom: 12px;
-    right: 12px;
-    transform: scale(-1);
-  }
+  .canvas-corner.tl { top: 12px; left: 12px; }
+  .canvas-corner.tr { top: 12px; right: 12px; transform: scaleX(-1); }
+  .canvas-corner.bl { bottom: 12px; left: 12px; transform: scaleY(-1); }
+  .canvas-corner.br { bottom: 12px; right: 12px; transform: scale(-1); }
 
   .canvas-label {
     position: absolute;
@@ -396,21 +381,11 @@
     color: rgba(var(--color-text-rgb), 0.45);
   }
 
-  .canvas-index {
-    color: rgba(var(--color-text-rgb), 0.9);
-    font-weight: 700;
-    font-size: 0.75rem;
-  }
+  .canvas-index { color: rgba(var(--color-text-rgb), 0.9); font-weight: 700; font-size: 0.75rem; }
 
-  .canvas-sep {
-    opacity: 0.3;
-  }
+  .canvas-sep { opacity: 0.3; }
 
-  .canvas-images {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-  }
+  .canvas-images { position: absolute; inset: 0; z-index: 1; }
 
   .canvas-img {
     position: absolute;
@@ -421,25 +396,13 @@
     object-position: center top;
     opacity: 0;
     transform: scale(1.08);
-    transition:
-      opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
-      transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
     will-change: transform, opacity;
   }
 
-  .canvas-img.active {
-    opacity: 1;
-    transform: scale(1);
-    z-index: 2;
-  }
-
-  .canvas-img.prev {
-    transform: scale(0.96);
-  }
-
-  .canvas-img.next {
-    transform: scale(1.08);
-  }
+  .canvas-img.active { opacity: 1; transform: scale(1); z-index: 2; }
+  .canvas-img.prev { transform: scale(0.96); }
+  .canvas-img.next { transform: scale(1.08); }
 
   .canvas-images::after {
     content: "";
@@ -459,7 +422,6 @@
 
   @media (max-width: 1024px) {
     .typo-wrapper {
-      /* Drifts slightly upward and fades — stays close so no dead space */
       transform: translateY(calc(var(--t-prog, 1) * -8vh));
       opacity: calc(1 - var(--t-prog, 1));
     }
@@ -485,36 +447,48 @@
       top: 50%;
       left: 50%;
       translate: -50% -50%;
-      /* Scale Reveal: blooms from its final position — zero travel distance, zero dead space */
       transform: scale(calc(0.88 + 0.12 * var(--t-prog, 1)));
       opacity: var(--t-prog, 1);
       width: clamp(280px, 85vw, 430px);
       z-index: 5;
-      box-shadow:
+      box-shadow: 
         0 40px 100px -20px rgba(var(--color-bg-rgb), 0.9),
         inset 0 0 60px rgba(var(--color-bg-rgb), 0.6),
         0 0 0 1px rgba(var(--color-text-rgb), 0.04);
     }
 
-    .story-pin-outer {
-      height: 500vh;
-    }
-
-    .story-section {
-      height: 100vh;
-      padding: 0 var(--fluid-edge);
-    }
+    .story-pin-outer { height: 500vh; }
+    .story-section { height: 100vh; padding: 0 var(--fluid-edge); }
   }
 
   @media (min-width: 1025px) and (max-width: 1280px) {
-    .story-container {
-      grid-template-columns: 1fr 1fr;
-      gap: 3rem;
+    .story-container { grid-template-columns: 1fr 1fr; gap: 3rem; }
+    .typo-wrapper { --center-offset: 25vw; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+
+    /* Aurora text: keep gradient visible, stop flow animation */
+    .typo-narrative.revealed .word.highlight.aurora-text { animation: none; }
+    .typo-narrative.revealed .word.highlight.aurora-text:hover { animation: none; }
+
+    /* Word reveals: instant appearance instead of staggered fly-up */
+    .typo-narrative .word {
+      transition-duration: 0.2s;
+      transform: none;
     }
 
-    .typo-wrapper {
-      /* Grid is now 50/50. Column center is at 25vw. We need to push right by 25vw to reach screen center (50vw) */
-      --center-offset: 25vw;
+    /* Image crossfade: shorter, no scale transform */
+    .canvas-img {
+      transition-duration: 0.3s;
+      will-change: auto;
+    }
+
+    /* Remove layer promotion hints */
+    .typo-wrapper,
+    .photo-canvas,
+    .typo-narrative .word {
+      will-change: auto;
     }
   }
 </style>

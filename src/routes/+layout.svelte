@@ -11,14 +11,14 @@
   import { setScrollState, ScrollState } from "$lib/stores/scroll.svelte";
   import type { Attachment } from "svelte/attachments";
 
-  import type { LayoutProps } from './$types';
+  import type { LayoutProps } from "./$types";
 
   let { children }: LayoutProps = $props();
-  
+
   // Initialize Isolated Contexts (Svelte 5.40+)
   const menuState = setMenuState(new MenuState());
   const wrapperScroll = setScrollState(new ScrollState());
-  
+
   let lenis: Lenis | undefined = $state();
   let rafId: number | undefined;
 
@@ -26,7 +26,9 @@
   let scrollTimeout: ReturnType<typeof setTimeout>;
   let isResizing = $state(false);
   let resizeTimeout: ReturnType<typeof setTimeout>;
-  let scrollProgress = $derived(Math.min(1, Math.max(0, wrapperScroll.y / wrapperScroll.limit)));
+  let scrollProgress = $derived(
+    Math.min(1, Math.max(0, wrapperScroll.y / wrapperScroll.limit)),
+  );
 
   /**
    * Svelte 5 Attachment for Lenis Smooth Scroll
@@ -50,15 +52,18 @@
         rafId = requestAnimationFrame(raf);
       }
 
-      lenisInstance.on("scroll", ({ scroll, limit }: { scroll: number; limit: number }) => {
-        wrapperScroll.update(scroll, limit);
+      lenisInstance.on(
+        "scroll",
+        ({ scroll, limit }: { scroll: number; limit: number }) => {
+          wrapperScroll.update(scroll, limit);
 
-        showScrollbar = true;
-        clearTimeout(scrollTimeout);
-        scrollTimeout = setTimeout(() => {
-          showScrollbar = false;
-        }, 3000);
-      });
+          showScrollbar = true;
+          clearTimeout(scrollTimeout);
+          scrollTimeout = setTimeout(() => {
+            showScrollbar = false;
+          }, 3000);
+        },
+      );
 
       rafId = requestAnimationFrame(raf);
     };
@@ -130,26 +135,35 @@
   <link rel="icon" href={favicon} />
 </svelte:head>
 
-<Menu 
-  onclose={() => { menuState.close(); lenis?.start(); }} 
-  {isResizing} 
+<Menu
+  onclose={() => {
+    menuState.close();
+    lenis?.start();
+  }}
+  {isResizing}
 />
 
-<EventsPanel 
-  onclose={() => { menuState.closeLeft(); lenis?.start(); }} 
-  {isResizing} 
+<EventsPanel
+  onclose={() => {
+    menuState.closeLeft();
+    lenis?.start();
+  }}
+  {isResizing}
 />
 
 <!-- Scroll Progress Bar -->
 <div class={["scroll-progress-container", showScrollbar && "visible"]}>
-  <div class="scroll-progress-bar" style:transform="scaleX({scrollProgress})"></div>
+  <div
+    class="scroll-progress-bar"
+    style:transform="scaleX({scrollProgress})"
+  ></div>
 </div>
 
 <div
   class={[
     "layout-shell",
     menuState.isOpen && "is-open",
-    menuState.isLeftOpen && "is-left-open"
+    menuState.isLeftOpen && "is-left-open",
   ]}
 >
   <div class="sticky-header-wrapper">
@@ -159,13 +173,13 @@
         <button
           class="nav-btn left-trigger mobile-only"
           onclick={openLeftMenu}
-          aria-label="Open events"
+          aria-label="Open tickets panel"
         >
           <div class="nav-lines events-icon">
             <span class="line top-line"></span>
             <span class="line bot-line"></span>
           </div>
-          <span class="nav-text-persistent">EVENTS</span>
+          <span class="nav-text-persistent">TICKETS</span>
         </button>
       </div>
 
@@ -191,42 +205,50 @@
 
   <!-- Vertical Nav Labels (Desktop only) -->
   <div class="vertical-label-container left desktop-only">
-    <button class="v-label" onclick={openLeftMenu} aria-label="Open events panel">
-      <span>EVENTS</span>
+    <button
+      class="v-label"
+      onclick={openLeftMenu}
+      aria-label="Open tickets panel"
+    >
+      <span>TICKETS</span>
     </button>
   </div>
 
   <div class="vertical-label-container right desktop-only">
-    <button class="v-label" onclick={openMenu} aria-label="Open navigation menu">
+    <button
+      class="v-label"
+      onclick={openMenu}
+      aria-label="Open navigation menu"
+    >
       <span>MENU</span>
     </button>
   </div>
 
-    <div
-      class={[
-        "page-wrapper",
-        menuState.isOpen && "is-open",
-        menuState.isLeftOpen && "is-left-open",
-        isResizing && "no-transition"
-      ]}
-      {@attach smoothScroll}
-    >
-      {#key page.url.pathname}
-        <div
-          in:fade={{ duration: 400, delay: 400 }}
-          out:fade={{ duration: 400 }}
-          style="display: contents"
-        >
-          {@render children()}
-        </div>
-      {/key}
-    </div>
+  <div
+    class={[
+      "page-wrapper",
+      menuState.isOpen && "is-open",
+      menuState.isLeftOpen && "is-left-open",
+      isResizing && "no-transition",
+    ]}
+    {@attach smoothScroll}
+  >
+    {#key page.url.pathname}
+      <div
+        in:fade={{ duration: 400, delay: 400 }}
+        out:fade={{ duration: 400 }}
+        style="display: contents"
+      >
+        {@render children()}
+      </div>
+    {/key}
+  </div>
 </div>
 
 <style>
   :global(:root) {
-    /* เพิ่มหน้ากว้างเมนูเพื่อให้ตัวเว็บถูกดันไปทางซ้ายมากขึ้น */
-    --menu-width: 40%;
+    /* Balanced menu width: 33% (approx 1/3) provides a good middle ground between 40% and 28% */
+    --menu-width: 33%;
     /* ฝั่ง events แยก token อิสระจากเมนูขวา */
     --events-panel-width: clamp(34rem, 48vw, 42rem);
     /* ระดับการย่อของตัวเว็บ (Scale) */
@@ -235,8 +257,8 @@
     /* Content offset inside the menu panel follows viewport size smoothly. */
     --menu-content-offset: clamp(2rem, 8vw, 8rem);
     --events-content-offset: clamp(2.5rem, 5vw, 4rem);
-    --menu-link-size: clamp(28px, 2.5vw, 32px);
-    --menu-link-gap: clamp(1.8rem, 2.5vw, 2.2rem);
+    --menu-link-size: clamp(28px, 2.8vw, 36px);
+    --menu-link-gap: clamp(3.5rem, 5vw, 4.5rem);
 
     /* Global Fluid Edge for consistent horizontal alignment across all screens */
     --fluid-edge: clamp(3rem, 8vw, 8rem);
@@ -246,33 +268,33 @@
 
   @media (max-width: 1200px) {
     :global(:root) {
-      /* ปรับระยะให้ขยับไปซ้ายเพิ่มขึ้นในจอขนาดกลาง โดยให้สบกับจุดพัก 40% (1200 * 0.4 = 480) */
-      --menu-width: 480px;
+      /* Balanced width for mid-size screens */
+      --menu-width: 400px;
       --events-panel-width: clamp(30rem, 52vw, 38rem);
       --events-content-offset: clamp(2rem, 5vw, 3.25rem);
-      --menu-link-size: clamp(27px, 2.4vw, 30px);
-      --menu-link-gap: clamp(1.9rem, 2.2vw, 2.1rem);
+      --menu-link-size: clamp(27px, 2.8vw, 34px);
+      --menu-link-gap: clamp(3.5rem, 4.5vw, 4rem);
     }
   }
 
   @media (max-width: 900px) {
     :global(:root) {
-      /* ปรับให้ค่าที่ 900px จูบกับ 480px พอดี และจบที่ 340px ที่ 640px */
-      --menu-width: clamp(340px, 53.33%, 480px);
+      /* Balanced width and percentage for tablet screens */
+      --menu-width: clamp(320px, 48%, 400px);
       --events-panel-width: clamp(26rem, 64vw, 32rem);
       /* ให้ Gap หดตัวสัมพันธ์กับหน้าจอ Tablet */
       --menu-content-offset: clamp(3.5rem, 10vw, 6rem);
       --events-content-offset: clamp(1.75rem, 4vw, 2.75rem);
       /* Font ค่อยๆ หดตัวลง */
-      --menu-link-size: clamp(26px, 3vw, 30px);
-      --menu-link-gap: clamp(1.8rem, 2vw, 2rem);
+      --menu-link-size: clamp(26px, 3.5vw, 31px);
+      --menu-link-gap: clamp(3rem, 4.5vw, 3.5rem);
     }
   }
 
   @media (max-width: 640px) {
     :global(:root) {
-      /* ปรับให้ค่าที่ 640px เริ่มต้นที่ 340px พอดีเป๊ะเพื่อไม่ให้กระโดด */
-      --menu-width: clamp(260px, 82%, 340px);
+      /* Balanced width and percentage for mobile screens */
+      --menu-width: clamp(250px, 78%, 320px);
       --events-panel-width: clamp(20rem, 90vw, 24rem);
       /* บนมือถือย่อให้น้อยลงนิดนึงเพื่อให้ยังเห็นเนื้อหาข้างใน */
       --menu-scale: 0.85;
@@ -281,7 +303,7 @@
       --menu-content-offset: clamp(2rem, 10vw, 3.5rem);
       --events-content-offset: clamp(1.25rem, 5vw, 1.75rem);
       --menu-link-size: 26px;
-      --menu-link-gap: 1.8rem;
+      --menu-link-gap: 3rem;
     }
   }
 
@@ -395,16 +417,19 @@
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
     /* Pushed UP into the corner based on trends */
-    padding:
-      calc(1.5rem + env(safe-area-inset-top))
-      calc(var(--nav-edge) + env(safe-area-inset-right))
-      1.5rem
+    padding: calc(1.5rem + env(safe-area-inset-top))
+      calc(var(--nav-edge) + env(safe-area-inset-right)) 1.5rem
       calc(var(--nav-edge) + env(safe-area-inset-left));
     transition: opacity 0.4s ease;
   }
   .header-left {
     display: flex;
     justify-content: flex-start;
+    /* Snappy Premium Recovery: Shorter duration (0.5s) + Overlap delay so it starts slightly before layout finishes */
+    transition:
+      transform 0.5s cubic-bezier(0.22, 1, 0.36, 1)
+        calc(var(--anim-layout-duration) - 0.15s),
+      opacity 0.4s ease calc(var(--anim-layout-duration) - 0.15s);
   }
   .header-center {
     display: flex;
@@ -413,6 +438,11 @@
   .header-right {
     display: flex;
     justify-content: flex-end;
+    /* Snappy Premium Recovery: Shorter duration (0.5s) + Overlap delay so it starts slightly before layout finishes */
+    transition:
+      transform 0.5s cubic-bezier(0.22, 1, 0.36, 1)
+        calc(var(--anim-layout-duration) - 0.15s),
+      opacity 0.4s ease calc(var(--anim-layout-duration) - 0.15s);
   }
 
   /* --- NAV BUTTONS --- */
@@ -468,9 +498,13 @@
     position: fixed;
     top: 50%;
     transform: translateY(-50%) translateZ(0);
-    z-index: 20; /* Ensure higher than page content for stability */
+    z-index: 20;
     pointer-events: none;
-    transition: opacity 0.4s ease;
+    /* Snappy Premium Recovery: Shorter duration (0.5s) + Overlap delay so it starts slightly before layout finishes */
+    transition:
+      opacity 0.4s ease calc(var(--anim-layout-duration) - 0.15s),
+      transform 0.5s cubic-bezier(0.22, 1, 0.36, 1)
+        calc(var(--anim-layout-duration) - 0.15s);
     will-change: transform, opacity;
   }
 
@@ -482,9 +516,9 @@
   }
 
   .v-label {
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid rgba(var(--color-text-rgb), 0.1);
     /* Razor-thin rim highlight on the leading edge */
     box-shadow:
@@ -570,23 +604,63 @@
     text-shadow: 0 0 12px rgba(var(--color-text-rgb), 0.3);
   }
 
-  /* Hide labels/sidebars when panels are open */
-  .layout-shell.is-open .vertical-label-container,
-  .layout-shell.is-left-open .vertical-label-container,
-  .layout-shell.is-open .site-header,
-  .layout-shell.is-left-open .site-header {
+  /* Slide labels/sidebars out of screen when panels are open */
+  .layout-shell.is-open .vertical-label-container.left,
+  .layout-shell.is-left-open .vertical-label-container.left {
+    transform: translateY(-50%) translateX(-80px) scale(0.9);
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.3s ease;
+    /* Awwwards Whiplash Exit: Fast Quart-In-Out */
+    transition:
+      opacity 0.3s ease 0s,
+      transform 0.45s cubic-bezier(0.85, 0, 0.15, 1) 0s;
+  }
+
+  .layout-shell.is-open .vertical-label-container.right,
+  .layout-shell.is-left-open .vertical-label-container.right {
+    transform: translateY(-50%) translateX(80px) scale(0.9);
+    opacity: 0;
+    pointer-events: none;
+    /* Awwwards Whiplash Exit: Fast Quart-In-Out */
+    transition:
+      opacity 0.3s ease 0s,
+      transform 0.45s cubic-bezier(0.85, 0, 0.15, 1) 0s;
+  }
+
+  /* Slide mobile header triggers out */
+  .layout-shell.is-open .site-header .header-left,
+  .layout-shell.is-left-open .site-header .header-left {
+    transform: translateX(-40px) scale(0.95);
+    opacity: 0;
+    pointer-events: none;
+    /* Awwwards Whiplash Exit: Fast Quart-In-Out */
+    transition:
+      opacity 0.3s ease 0s,
+      transform 0.4s cubic-bezier(0.85, 0, 0.15, 1) 0s;
+  }
+
+  .layout-shell.is-open .site-header .header-right,
+  .layout-shell.is-left-open .site-header .header-right {
+    transform: translateX(40px) scale(0.95);
+    opacity: 0;
+    pointer-events: none;
+    /* Awwwards Whiplash Exit: Fast Quart-In-Out */
+    transition:
+      opacity 0.3s ease 0s,
+      transform 0.4s cubic-bezier(0.85, 0, 0.15, 1) 0s;
+  }
+
+  /* Still ensure the container wrapper stops pointer events to be safe */
+  .layout-shell.is-open .site-header,
+  .layout-shell.is-left-open .site-header {
+    pointer-events: none;
   }
 
   /* ===== MOBILE BREAKPOINTS ===== */
   @media (max-width: 1024px) {
     .site-header {
-      padding:
-        calc(1.25rem + env(safe-area-inset-top))
-        calc(1.5rem + env(safe-area-inset-right))
-        1.25rem
+      padding: calc(1.25rem + env(safe-area-inset-top))
+        calc(1.5rem + env(safe-area-inset-right)) 1.25rem
         calc(1.5rem + env(safe-area-inset-left));
     }
 
@@ -614,6 +688,52 @@
     }
     .layout-shell .mobile-only {
       display: flex;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    /* Return: gentle fade-in — no transform, just opacity */
+    .header-left,
+    .header-right {
+      transition: opacity 0.35s ease;
+    }
+
+    /* Exit: fast decisive fade-out when panel opens */
+    .layout-shell.is-open .site-header .header-left,
+    .layout-shell.is-left-open .site-header .header-left,
+    .layout-shell.is-open .site-header .header-right,
+    .layout-shell.is-left-open .site-header .header-right {
+      transition: opacity 0.2s ease;
+      transform: none;
+    }
+
+    /* Vertical labels: remove GPU hints and backdrop-filter */
+    .vertical-label-container {
+      will-change: auto;
+      transition: opacity 0.35s ease;
+    }
+
+    /* Exit for vertical labels */
+    .layout-shell.is-open .vertical-label-container,
+    .layout-shell.is-left-open .vertical-label-container {
+      transition: opacity 0.2s ease;
+      transform: translateY(-50%);
+    }
+
+    .v-label {
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      background: rgba(0, 0, 0, 0.85);
+    }
+
+    /* Page wrapper: shorter transition */
+    .page-wrapper {
+      transition-duration: 0.2s;
+    }
+
+    /* Scroll progress bar */
+    .scroll-progress-bar {
+      will-change: auto;
     }
   }
 </style>
