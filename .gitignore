@@ -38,3 +38,5 @@ vite.config.ts.timestamp-*
 /GEMINI.md
 /claude.md
 /agents.md
+# Test coverage
+/coverage
