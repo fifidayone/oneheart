@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+
 const mocks = vi.hoisted(() => ({
 	getMediaBucket: vi.fn(),
 	resolveHeroPosterKey: vi.fn()
@@ -11,7 +12,11 @@ vi.mock('$lib/server/hero-media', () => ({
 	resolveHeroPosterKey: mocks.resolveHeroPosterKey
 }));
 
-import { GET } from '../routes/media/hero-poster.avif/+server';
+import { GET } from './+server';
+
+function createEvent(partial: Partial<Parameters<typeof GET>[0]>): Parameters<typeof GET>[0] {
+	return partial as Parameters<typeof GET>[0];
+}
 
 describe('GET /media/hero-poster.avif', () => {
 	beforeEach(() => {
@@ -21,7 +26,7 @@ describe('GET /media/hero-poster.avif', () => {
 	it('returns 503 when media bucket is not configured', async () => {
 		mocks.getMediaBucket.mockReturnValue(undefined);
 
-		const response = await GET({ platform: undefined } as never);
+		const response = await GET(createEvent({ platform: undefined }));
 
 		expect(response.status).toBe(503);
 		expect(await response.text()).toContain('MEDIA_BUCKET_NOT_CONFIGURED');
@@ -31,7 +36,7 @@ describe('GET /media/hero-poster.avif', () => {
 		mocks.getMediaBucket.mockReturnValue({});
 		mocks.resolveHeroPosterKey.mockResolvedValue(null);
 
-		const response = await GET({ platform: {} as App.Platform } as never);
+		const response = await GET(createEvent({ platform: {} as App.Platform }));
 
 		expect(response.status).toBe(404);
 		expect(await response.text()).toContain('Hero poster not found in R2 bucket');
@@ -44,7 +49,7 @@ describe('GET /media/hero-poster.avif', () => {
 		mocks.getMediaBucket.mockReturnValue(bucket);
 		mocks.resolveHeroPosterKey.mockResolvedValue('hero-poster.avif');
 
-		const response = await GET({ platform: {} as App.Platform } as never);
+		const response = await GET(createEvent({ platform: {} as App.Platform }));
 
 		expect(bucket.get).toHaveBeenCalledWith('hero-poster.avif');
 		expect(response.status).toBe(404);
@@ -63,7 +68,7 @@ describe('GET /media/hero-poster.avif', () => {
 		mocks.getMediaBucket.mockReturnValue(bucket);
 		mocks.resolveHeroPosterKey.mockResolvedValue('hero-poster.avif');
 
-		const response = await GET({ platform: {} as App.Platform } as never);
+		const response = await GET(createEvent({ platform: {} as App.Platform }));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('content-type')).toBe('image/avif');
@@ -80,7 +85,7 @@ describe('GET /media/hero-poster.avif', () => {
 		mocks.getMediaBucket.mockReturnValue(bucket);
 		mocks.resolveHeroPosterKey.mockResolvedValue('hero-poster.avif');
 
-		const response = await GET({ platform: {} as App.Platform } as never);
+		const response = await GET(createEvent({ platform: {} as App.Platform }));
 
 		expect(response.status).toBe(500);
 		expect(await response.text()).toContain('Poster Streaming Error: poster boom');

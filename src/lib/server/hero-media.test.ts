@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { getMediaBucket, resolveHeroPosterKey, resolveHeroVideoKey } from './hero-media';
 
-function createBucket(existingKeys: Set<string>) {
+function createBucket(existingKeys: Set<string>): R2Bucket {
 	return {
 		head: vi.fn(async (key: string) => (existingKeys.has(key) ? { key } : null))
-	};
+	} as unknown as R2Bucket;
 }
 
 describe('hero-media', () => {

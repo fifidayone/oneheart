@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+
 const mocks = vi.hoisted(() => ({
 	getMediaBucket: vi.fn(),
 	resolveHeroVideoKey: vi.fn()
@@ -11,7 +12,11 @@ vi.mock('$lib/server/hero-media', () => ({
 	resolveHeroVideoKey: mocks.resolveHeroVideoKey
 }));
 
-import { GET } from '../routes/media/hero-video.mp4/+server';
+import { GET } from './+server';
+
+function createEvent(partial: Partial<Parameters<typeof GET>[0]>): Parameters<typeof GET>[0] {
+	return partial as Parameters<typeof GET>[0];
+}
 
 describe('GET /media/hero-video.mp4', () => {
 	beforeEach(() => {
@@ -21,7 +26,9 @@ describe('GET /media/hero-video.mp4', () => {
 	it('returns 503 when media bucket is not configured', async () => {
 		mocks.getMediaBucket.mockReturnValue(undefined);
 
-		const response = await GET({ platform: undefined, request: new Request('http://localhost') } as never);
+		const response = await GET(
+			createEvent({ platform: undefined, request: new Request('http://localhost') })
+		);
 
 		expect(response.status).toBe(503);
 		expect(await response.text()).toContain('MEDIA_BUCKET_NOT_CONFIGURED');
@@ -31,7 +38,9 @@ describe('GET /media/hero-video.mp4', () => {
 		mocks.getMediaBucket.mockReturnValue({});
 		mocks.resolveHeroVideoKey.mockResolvedValue(null);
 
-		const response = await GET({ platform: {} as App.Platform, request: new Request('http://localhost') } as never);
+		const response = await GET(
+			createEvent({ platform: {} as App.Platform, request: new Request('http://localhost') })
+		);
 
 		expect(response.status).toBe(404);
 		expect(await response.text()).toContain('Hero video not found in R2 bucket');
@@ -49,7 +58,9 @@ describe('GET /media/hero-video.mp4', () => {
 		mocks.getMediaBucket.mockReturnValue(bucket);
 		mocks.resolveHeroVideoKey.mockResolvedValue('hero-video.mp4');
 
-		const response = await GET({ platform: {} as App.Platform, request: new Request('http://localhost') } as never);
+		const response = await GET(
+			createEvent({ platform: {} as App.Platform, request: new Request('http://localhost') })
+		);
 
 		expect(response.status).toBe(200);
 		expect(bucket.get).toHaveBeenCalledWith('hero-video.mp4');
@@ -73,7 +84,7 @@ describe('GET /media/hero-video.mp4', () => {
 		mocks.resolveHeroVideoKey.mockResolvedValue('hero-video.mp4');
 
 		const request = new Request('http://localhost', { headers: { range: 'bytes=100-299' } });
-		const response = await GET({ platform: {} as App.Platform, request } as never);
+		const response = await GET(createEvent({ platform: {} as App.Platform, request }));
 
 		expect(bucket.get).toHaveBeenCalledWith('hero-video.mp4', { range: { offset: 100, length: 200 } });
 		expect(response.status).toBe(206);
@@ -94,7 +105,7 @@ describe('GET /media/hero-video.mp4', () => {
 		mocks.resolveHeroVideoKey.mockResolvedValue('hero-video.mp4');
 
 		const request = new Request('http://localhost', { headers: { range: 'bytes=100-200,300-400' } });
-		const response = await GET({ platform: {} as App.Platform, request } as never);
+		const response = await GET(createEvent({ platform: {} as App.Platform, request }));
 
 		expect(bucket.get).toHaveBeenCalledWith('hero-video.mp4');
 		expect(response.status).toBe(200);
@@ -107,7 +118,9 @@ describe('GET /media/hero-video.mp4', () => {
 		mocks.getMediaBucket.mockReturnValue(bucket);
 		mocks.resolveHeroVideoKey.mockResolvedValue('hero-video.mp4');
 
-		const response = await GET({ platform: {} as App.Platform, request: new Request('http://localhost') } as never);
+		const response = await GET(
+			createEvent({ platform: {} as App.Platform, request: new Request('http://localhost') })
+		);
 
 		expect(response.status).toBe(500);
 		expect(await response.text()).toContain('Video Streaming Error: boom');
