@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-
 const mocks = vi.hoisted(() => ({
 	getMediaBucket: vi.fn(),
 	resolveHeroPosterKey: vi.fn()
@@ -14,8 +13,25 @@ vi.mock('$lib/server/hero-media', () => ({
 
 import { GET } from './+server';
 
-function createEvent(partial: Partial<Parameters<typeof GET>[0]>): Parameters<typeof GET>[0] {
-	return partial as Parameters<typeof GET>[0];
+type GetEvent = Parameters<typeof GET>[0];
+
+function createEvent(overrides: Partial<GetEvent> = {}): GetEvent {
+	const request = overrides.request ?? new Request('http://localhost');
+	return {
+		cookies: { get: vi.fn(), getAll: vi.fn(() => []), set: vi.fn(), delete: vi.fn(), serialize: vi.fn(() => '') },
+		fetch: globalThis.fetch,
+		getClientAddress: () => '127.0.0.1',
+		locals: {},
+		params: {},
+		platform: undefined,
+		request,
+		route: { id: '/media/hero-poster.avif' },
+		setHeaders: vi.fn(),
+		url: new URL(request.url),
+		isDataRequest: false,
+		isSubRequest: false,
+		...overrides
+	} as GetEvent;
 }
 
 describe('GET /media/hero-poster.avif', () => {
