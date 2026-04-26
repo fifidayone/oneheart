@@ -173,13 +173,13 @@
         <button
           class="nav-btn left-trigger mobile-only"
           onclick={openLeftMenu}
-          aria-label="Open tickets panel"
+          aria-label="Open tours panel"
         >
           <div class="nav-lines events-icon">
             <span class="line top-line"></span>
             <span class="line bot-line"></span>
           </div>
-          <span class="nav-text-persistent">TICKETS</span>
+          <span class="nav-text-persistent">TOURS</span>
         </button>
       </div>
 
@@ -208,9 +208,9 @@
     <button
       class="v-label"
       onclick={openLeftMenu}
-      aria-label="Open tickets panel"
+      aria-label="Open tours panel"
     >
-      <span>TICKETS</span>
+      <span>TOURS</span>
     </button>
   </div>
 
@@ -296,9 +296,6 @@
       /* Balanced width and percentage for mobile screens */
       --menu-width: clamp(250px, 78%, 320px);
       --events-panel-width: clamp(20rem, 90vw, 24rem);
-      /* บนมือถือย่อให้น้อยลงนิดนึงเพื่อให้ยังเห็นเนื้อหาข้างใน */
-      --menu-scale: 0.85;
-      --events-panel-scale: 0.88;
       /* จูน Gap บนมือถือให้ชิดขึ้นแต่ไม่ทับขอบ */
       --menu-content-offset: clamp(2rem, 10vw, 3.5rem);
       --events-content-offset: clamp(1.25rem, 5vw, 1.75rem);
@@ -412,7 +409,7 @@
     top: 0;
     left: 0;
     right: 0;
-    pointer-events: auto;
+    pointer-events: none;
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
@@ -458,6 +455,7 @@
     position: relative;
     z-index: 5;
     transition: opacity 0.3s ease;
+    pointer-events: auto;
   }
 
   .nav-btn:hover {

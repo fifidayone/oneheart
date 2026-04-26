@@ -5,7 +5,7 @@ export const eventPage: PageShellContent = {
 };
 
 export const eventPanelCopy: EventPanelCopy = {
-  eyebrow: "Ticketing & Shows",
+  eyebrow: "Schedule",
   title: "Events",
   tickets: "TICKETS",
   statusAvailable: "AVAILABLE",

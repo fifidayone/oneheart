@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { Attachment } from "svelte/attachments";
   import FeaturedToast from "$lib/components/home/FeaturedToast.svelte";
+  import BrandCell from "$lib/components/home/BrandCell.svelte";
+  import { heroBrandGroups } from "$lib/content/brands";
   import heroPoster from "$lib/assets/home/hero/hero-poster.avif";
   import imgMainLogo from "$lib/assets/home/brands/main_oneheart.png?enhanced";
 
@@ -164,12 +166,9 @@
 
   <div class="hero-content">
     <div class="hero-top-nav">
-      <div class="nav-col">
-        LAGANJA<br />ESTRANJA
-      </div>
-      <div class="nav-col">
-        CAFÉ DALIDA &<br />C.U.M. PARTY
-      </div>
+      {#each heroBrandGroups.slice(0, 2) as group (group.displayLabel)}
+        <BrandCell {group} />
+      {/each}
       <div class="nav-col center">
         <div class="brand-lockup">
           <div class="brand-text" {@attach measureLockup}>
@@ -194,12 +193,9 @@
           />
         </div>
       </div>
-      <div class="nav-col">
-        PRISM<br />GALAXIA
-      </div>
-      <div class="nav-col right">
-        DRAG RACE<br />THAI FANS
-      </div>
+      {#each heroBrandGroups.slice(2) as group (group.displayLabel)}
+        <BrandCell {group} />
+      {/each}
     </div>
 
     <div class="hero-bottom-text">
@@ -296,36 +292,19 @@
     top: 0;
     left: 0;
     right: 0;
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: auto 1fr auto 1fr auto;
     align-items: center;
-    padding: clamp(0.75rem, 1.5vw, 1rem) clamp(2rem, 5vw, 3.5rem);
+    justify-items: center;
+    padding: clamp(0.5rem, 1.2vw, 0.75rem) clamp(2rem, 5vw, 3.5rem);
     opacity: 0;
     animation: fade-in-up 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     animation-delay: 0.1s;
   }
 
-  /* Brand names — small, quiet, secondary hierarchy */
-  .nav-col {
-    font-family: var(--font-primary);
-    color: var(--color-text, #ffffff);
-    font-size: clamp(0.6rem, 0.75vw, 0.78rem);
-    font-weight: 700;
-    line-height: 1.3;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    pointer-events: auto;
-    text-align: left;
-  }
+  /* Brand names styling is now in BrandCell.svelte */
 
-  /* Far right column aligns text right for visual symmetry */
-  .nav-col.right {
-    text-align: right;
-  }
-
-  /* Center lockup: ONE HEART + logo + PRODUCTIONS
-     The logo is absolutely positioned so it never affects
-     text flow, line-height, or alignment. */
+  /* Center lockup: ONE HEART + logo + PRODUCTIONS */
   .nav-col.center {
     font-size: clamp(1.05rem, 1.5vw, 1.35rem);
     font-weight: 700;
@@ -354,7 +333,7 @@
        prevents a simple font-size ratio from resulting in identical widths. */
     letter-spacing: 0;
     margin-right: 0;
-    line-height: 1; /* Tighter line height for the lockup */
+    line-height: 1.05; /* Balanced line height for the lockup */
   }
 
   /* Optical alignment: Curved 'O' needs to overshoot slightly to the left
@@ -374,10 +353,10 @@
   .lockup-logo {
     display: block;
     flex-shrink: 0;
-    width: 3.8em;
-    height: 3.8em;
+    width: 3.4em;
+    height: 3.4em;
     object-fit: contain;
-    margin-left: -0.1em; /* Pushing the logo closer to the text */
+    margin-left: 0.25em; /* Giving the logo more breathing room */
   }
 
   /* ─── Bottom Headline ─── 
@@ -445,9 +424,6 @@
 
   /* ─── Tablet ─── */
   @media (max-width: 1024px) {
-    .nav-col {
-      font-size: clamp(0.55rem, 1.1vw, 0.68rem);
-    }
     .nav-col.center {
       font-size: clamp(0.85rem, 2vw, 1.1rem);
     }
@@ -456,24 +432,15 @@
   /* ─── Mobile ─── */
   @media (max-width: 768px) {
     .hero-top-nav {
-      flex-wrap: wrap;
+      grid-template-columns: repeat(2, 1fr);
       gap: 1.5rem;
-      justify-content: space-between;
     }
     /* Center lockup takes full width, first row */
     .nav-col.center {
-      width: 100%;
+      grid-column: 1 / -1;
       order: -1;
       text-align: center;
       font-size: 0.95rem;
-    }
-    .nav-col {
-      font-size: 0.65rem;
-      width: calc(50% - 0.75rem);
-    }
-    .nav-col:nth-child(2),
-    .nav-col:nth-child(5) {
-      text-align: right;
     }
     .staggered-headline {
       font-size: clamp(1.75rem, 7vw, 2.25rem);

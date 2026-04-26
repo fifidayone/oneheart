@@ -78,7 +78,6 @@
     {#if menuState.isLeftOpen}
       <header class="ev-header" in:fly={{ y: 20, duration: 600, delay: 50, easing: expoOut }}>
         <span class="ev-eyebrow">{PANEL_COPY.eyebrow}</span>
-        <h2 class="ev-title">{PANEL_COPY.title}</h2>
 
         <!-- View Mode Toggle -->
         <div class="ev-view-toggle" in:fly={{ y: 10, duration: 400, delay: 150, easing: expoOut }}>
@@ -221,24 +220,13 @@
 
   .ev-eyebrow {
     font-family: var(--font-primary);
-    font-size: 0.7rem;
-    letter-spacing: 0.4em;
-    text-transform: uppercase;
-    color: rgba(var(--color-text-rgb), 0.35);
-    display: block;
-    /* Pushed title slightly further down to create a distinct overline reading rhythm */
-    margin-bottom: clamp(0.75rem, 1.5vh, 1rem);
-  }
-
-  .ev-title {
-    font-family: var(--font-primary);
-    font-size: clamp(1.6rem, 2.5vw, 2.2rem);
+    font-size: clamp(1.2rem, 1.8vw, 1.5rem);
     font-weight: 700;
+    letter-spacing: 0.2em;
     text-transform: uppercase;
-    letter-spacing: -0.01em;
-    color: var(--color-text);
-    margin: 0;
-    line-height: 1.1;
+    color: rgba(var(--color-text-rgb), 0.9);
+    display: block;
+    margin-bottom: clamp(0.75rem, 1.5vh, 1rem);
   }
 
   .ev-footer p {
@@ -314,6 +302,21 @@
     .close-btn-left:hover svg path {
       stroke: var(--color-bg-alt);
     }
+
+    .ev-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .ev-eyebrow {
+      margin-bottom: 0;
+    }
+
+    .ev-header .ev-view-toggle {
+      margin-top: 0;
+    }
   }
 
   @media (max-width: 1024px) {
@@ -326,6 +329,19 @@
     .events-nav {
       width: 100%;
       max-width: 32rem;
+    }
+
+    .ev-eyebrow {
+      margin-bottom: clamp(0.5rem, 1vh, 0.75rem);
+    }
+
+    .ev-view-toggle {
+      margin-top: clamp(0.5rem, 1.5vh, 1rem);
+    }
+
+    .view-toggle-track {
+      width: 100%;
+      min-width: unset;
     }
   }
 

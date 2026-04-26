@@ -6,6 +6,11 @@
       "sourceType": "github",
       "computedHash": "44722c0ec8698cc0b57b7e1813e4e4c18db22a8015b243c03d06c1c7a02606e0"
     },
+    "algorithmic-color-palette": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "e04b1957e6450688f7e2b28b72b89080dc81e481b56277ad876cf41cebc9cf54"
+    },
     "animate": {
       "source": "pbakaus/impeccable",
       "sourceType": "github",
@@ -26,20 +31,45 @@
       "sourceType": "github",
       "computedHash": "a543474e4ded36d5991abb2db6b50021442a23096144ef55622b27113c41c625"
     },
+    "brand-visual-language": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "74d875edd23695310c8fb4e74ed1d68b21efa921f12fa7804f419a6669db6f75"
+    },
+    "button-states": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "a75175cf6602f5e6e29765736dc04c6e25127f3787bf2466c8a17658c31bf69a"
+    },
     "clarify": {
       "source": "pbakaus/impeccable",
       "sourceType": "github",
       "computedHash": "22918eb15984e524bcd1db4f871cff9ab541b38c55979f725d12adf56abd2f36"
+    },
+    "color-mode-and-theme": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "0e8168c2967ea1dfd42e3e81f1d28534b1d1460eb7f23db48fdfc8bab6fbf5af"
     },
     "colorize": {
       "source": "pbakaus/impeccable",
       "sourceType": "github",
       "computedHash": "7b14119c07e6c11698329018440b907ed3b99e15605309adfe2c2df0e42d9c82"
     },
+    "component-family-consistency": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "4005839a6c03aa58ea9b0ed05c4b1b79216e779e47ae2cda3762dd064e6d46cc"
+    },
     "critique": {
       "source": "pbakaus/impeccable",
       "sourceType": "github",
       "computedHash": "659e79835cc453341b5de302d9f91fa1e372d1de840ad0f4faabcc6138f80f4e"
+    },
+    "data-display-and-selection": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "41cbdad6a99379ffd0b4d2a38164720a4a1a5f6c45c50491aaaec4aec6a803aa"
     },
     "delight": {
       "source": "pbakaus/impeccable",
@@ -56,10 +86,20 @@
       "sourceType": "github",
       "computedHash": "15645c6dccfebd541e5a7934fc0741a12c951ee306d61454708ae1f75c99d10e"
     },
+    "elevation-and-depth": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "480c5f9e4029b8a7c6d8f0f0f03fdcfa8ce382ab62c2f54d09410d652b1f83e7"
+    },
     "extract": {
       "source": "pbakaus/impeccable",
       "sourceType": "github",
       "computedHash": "f8767b7fdbd28aca98d62f016c7e8f7096fc737218ba07dde94e49a637f45ea7"
+    },
+    "form-design": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "1599591564370af1268d7322cd3cc4cd99607d708f207306692c7e7a35783419"
     },
     "frontend-design": {
       "source": "pbakaus/impeccable",
@@ -70,6 +110,21 @@
       "source": "Leonxlnx/taste-skill",
       "sourceType": "github",
       "computedHash": "524f7c7950c3fde726101613f630140411c7d080e63be718687f4b38f919be81"
+    },
+    "generate-ui-from-brand": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "2389d2a72946c38de3aa9065d061e7d25311116b4871f5f3064ca6631484b4a9"
+    },
+    "gestalt-ui-organisation": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "534a6bc5c36106b4ca794adaf21df6409ea9dbe394906a731a49b7add7c3a623"
+    },
+    "global-toolbar-controls": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "9243d46d69fd0c3460d8a5edefe8859ef50b5c26a0f9781a8a871ac5eb78dbe9"
     },
     "gpt-taste": {
       "source": "Leonxlnx/taste-skill",
@@ -96,20 +151,55 @@
       "sourceType": "github",
       "computedHash": "e66e5a2a8b73cef79ab6546459c665e8b983645689c5f3772f7eed8b9f1e8e0e"
     },
+    "information-architecture": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "f69303d6f3033b61d73ae8c2b5426396067c2543a01699b37dde6db1b684b532"
+    },
     "layout": {
       "source": "pbakaus/impeccable",
       "sourceType": "github",
       "computedHash": "746432275018adb16be89276afa95cd6f868a38598cf7075294973ce0e757919"
+    },
+    "loading-states-and-perceived-performance": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "16a5d520739960c5e0533fb1ca4af6d7589d9aaaf4f22913b1a36c7aa5557fb6"
+    },
+    "micro-interactions": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "030343a52af717d581e8b24ac941e118cb5a4e9d45159748d61edb31a7adcee2"
     },
     "minimalist-ui": {
       "source": "Leonxlnx/taste-skill",
       "sourceType": "github",
       "computedHash": "7e88897e0371184e97a82b8d9ef080323c13f21eb067b58ef71eb05173a08ac2"
     },
+    "modular-scale-typography": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "df245a5839636a641ff7e2f14ac422ca5ffaf1d4a005bac6a4a5473393f850be"
+    },
+    "motion-and-storytelling": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "98b63e910b36e7be266345e93b760ffb353bac39c34a20021a2ec00ee3f17b1d"
+    },
+    "nielsen-usability-heuristics": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "ecb1580cb9c72202b843b5b33ee495f677717208ba66ca9affd6e034f8552ecc"
+    },
     "normalize": {
       "source": "pbakaus/impeccable",
       "sourceType": "github",
       "computedHash": "01a3704423d990279e3d94fa9b58297690e8344f84d8caeab1dcd825c7ed8751"
+    },
+    "notifications-and-recovery": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "828c91d613598e41b8b21a5361069cebfd45a2744819a65a9b2d916cc13c0733"
     },
     "onboard": {
       "source": "pbakaus/impeccable",
@@ -126,6 +216,11 @@
       "sourceType": "github",
       "computedHash": "16f80188b3e700f0b7761b08036f69bb463adb42de5cf91576db448c8e85c683"
     },
+    "performance-and-web-vitals": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "2cf5e775b4b225c2cbbcb8dd2ac4e3767d35eea3e22bce102ccfeb4e27c51b8d"
+    },
     "polish": {
       "source": "pbakaus/impeccable",
       "sourceType": "github",
@@ -136,15 +231,45 @@
       "sourceType": "github",
       "computedHash": "c2b06cf395b04471bdd4cb07b71b49e3bce50800acdfa773a824d1c46d0661d3"
     },
+    "real-world-metaphors": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "2a41eaee9fa51a64ec5356e0c0d258884f6d3f115a10f321d8b47d5e86bde7ee"
+    },
     "redesign-existing-projects": {
       "source": "Leonxlnx/taste-skill",
       "sourceType": "github",
       "computedHash": "47eced3e960a2c961d3cbee11fa1216264f589344b586a5cbd03967cd6b9c54b"
     },
+    "responsive-paradigms": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "69e193e3af7e7ca79cc6cb1e5b717ea6c6bd4e0017ac6c527ff5af0620254cf7"
+    },
+    "scroll-areas": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "8522584653c8aaa7a78b84c05f10218634636d1036b6aeda3ad383eb8f9d3422"
+    },
+    "semantic-html-and-seo": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "e3b53eb76a4188d382dc5d44d6514ca10539784dccd018d4234e7de789c63ad5"
+    },
     "shape": {
       "source": "pbakaus/impeccable",
       "sourceType": "github",
       "computedHash": "45e5bb82c573fb95a86ef86f358d744575f0abe35e57d9e10143cf8d16a1aa2d"
+    },
+    "status-colors-and-errors": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "d81686100c6aabbac1b664783602e01c526126c94ea93307f8dbbee8fad10473"
+    },
+    "sticky-and-fixed-elements": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "e603d0699ab359d51aa670c28e3d120e18bfd74360d00208b54413281f91b191"
     },
     "stitch-design-taste": {
       "source": "Leonxlnx/taste-skill",
@@ -160,6 +285,31 @@
       "source": "pbakaus/impeccable",
       "sourceType": "github",
       "computedHash": "26f31a4cbe25cbe70a3bc95ce4f229767bf1dce2f59e049fadde13fc56bfc815"
+    },
+    "ui-context-and-scope": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "302d78d981e2bb5c86031cc7c7c05b1c15b4ded8bd62f30d8828c3e7655152a1"
+    },
+    "ui-density": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "2ad88de460c957c21e1f9a259ec2a9ca0ff7e917bc1fa7d841c952b4fb88f44d"
+    },
+    "user-flows-and-guided-paths": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "73854f0b09b37a738a182c9751f536a16e5d75305714db3eda0e88788db225ad"
+    },
+    "visual-emphasis-and-hierarchy": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "b99fb4226ec2bcf7fda01d1efe434b5a85663ad104ad8346a6e4cfa2c0d17d49"
+    },
+    "wcag-accessibility": {
+      "source": "dembrandt/dembrandt-skills",
+      "sourceType": "github",
+      "computedHash": "753c1343df44c05cc2cc8ab5e32a341d312dee1dbce535d419be941a99cd7766"
     },
     "wrangler": {
       "source": "cloudflare/skills",

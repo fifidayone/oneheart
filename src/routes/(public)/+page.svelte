@@ -1,6 +1,5 @@
 <script lang="ts">
   import HeroSection from "$lib/components/home/HeroSection.svelte";
-  import ClientsMarquee from "$lib/components/home/ClientsMarquee.svelte";
   import StorySection from "$lib/components/home/StorySection.svelte";
   import CollaborationSection from "$lib/components/home/CollaborationSection.svelte";
   import { homeMeta } from "$lib/content/home";
@@ -19,6 +18,5 @@
 
 <HeroSection />
 
-<ClientsMarquee />
 <StorySection />
 <CollaborationSection />
